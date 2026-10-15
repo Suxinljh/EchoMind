@@ -110,6 +110,8 @@ pnpm exec wrangler deploy
 
 Cloudflare Workers Builds 连接此 GitHub 仓库时，生产分支选 `main`，构建命令填 `pnpm build:cloudflare`，部署命令填 `pnpm exec wrangler deploy`。模型文件已在 R2，云端构建无需下载模型。首次部署后检查首页、`/changelog`、`/models/zipformer-2025/encoder.onnx` 和模型连接测试。
 
+`wrangler.jsonc` 已启用 Workers Cache。模型接口的成功响应设置了 `Cache-Control: public, max-age=86400`，Cloudflare 边缘与浏览器均可缓存 1 天；模型请求先命中 Worker 缓存，未命中时才从 R2 读取。`/api/model` 返回 `no-store`，不会缓存用户的 AI 请求或响应。部署后可连续请求 `https://echomind.ljhsu.xin/models/zipformer-2025/tokens.txt`，查看响应头 `Cf-Cache-Status` 是否从 `MISS` 变成 `HIT`。更换模型文件时需清理缓存或使用新文件名，避免 1 天内继续提供旧版本。
+
 云端模型服务只接受公开 HTTPS 域名；本机的 `localhost` 模型接口仍可用于本地运行，但 Cloudflare Worker 无法访问用户电脑上的服务。API Key 由浏览器当前标签页提交给本站 Worker，再转发给用户配置的模型服务，不作为构建或运行时密钥保存。
 
 维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。

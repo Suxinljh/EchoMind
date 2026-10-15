@@ -108,10 +108,10 @@ async function handleModel(request: Request): Promise<Response> {
 }
 
 async function handleModelFile(request: Request, env: Env, name: string): Promise<Response> {
-  if (!modelFiles.has(name)) return new Response('Not found', { status: 404 })
-  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
+  if (!modelFiles.has(name)) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { 'Cache-Control': 'no-store' } })
   const object = await env.MODELS.get(`echomind/${name}`)
-  if (!object) return new Response('Model file not found', { status: 404 })
+  if (!object) return new Response('Model file not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
   return new Response(request.method === 'HEAD' ? null : object.body, {
     headers: {
       'Content-Type': name.endsWith('.txt') ? 'text/plain; charset=utf-8' : 'application/octet-stream',

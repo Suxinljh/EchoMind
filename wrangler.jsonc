@@ -12,6 +12,9 @@
   "r2_buckets": [
     { "binding": "MODELS", "bucket_name": "app" }
   ],
+  "cache": {
+    "enabled": true
+  },
   "observability": {
     "enabled": true,
     "traces": { "enabled": true }

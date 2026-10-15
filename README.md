@@ -4,6 +4,12 @@ EchoMind 是一个在浏览器中练习表达的本地应用。它支持模拟�
 
 [查看更新日志](CHANGELOG.md)。应用中也可点击左上角的 Beta 标识，进入 `/changelog` 页面。
 
+## 下载即用（macOS Intel）
+
+从 [GitHub Releases](https://github.com/Suxinljh/EchoMind/releases) 下载 `EchoMind-0.1.0-macos-x64.zip`，解压后双击「Start EchoMind.command」。浏览器会自动打开本机页面；保持终端窗口运行，关闭终端即可停止服务。首次使用时请允许浏览器访问麦克风。发布包内已含本地语音转写模型及 Node.js 运行环境，无需安装 pnpm，也无需另行下载语音模型。
+
+目前发布包面向 **macOS Intel（x64）**。Apple Silicon 设备需安装 Rosetta 2 才能运行这个版本。文字出题和报告分析仍需在设置中配置自己的兼容 OpenAI Chat Completions 的模型服务；发布包不包含 API Key 或在线大模型。
+
 ## 功能
 
 - **两种练习场景**：模拟面试根据目标岗位和 JD 逐题回答，可设置 1–15 道专业问题，并选择是否加入自我介绍与反问环节；工作汇报围绕主题、听众、目的和计划要点练习连续表达。
@@ -78,6 +84,8 @@ pnpm build
 ```
 
 构建包含 TypeScript 检查，产物写入 `dist/`。
+
+维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。
 
 ## 隐私与数据
 

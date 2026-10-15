@@ -69,7 +69,7 @@ class ProviderFailure extends Error {
   constructor(readonly status: number, readonly body: string) { super('Provider request failed') }
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse) {
+export async function handleModelRequest(req: IncomingMessage, res: ServerResponse) {
   const host = req.headers.host || ''
   const origin = req.headers.origin || ''
   if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host) || origin !== `http://${host}`) { send(res, 403, { error: '只接受本机同源请求' }); return }
@@ -115,5 +115,5 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 }
 
 export function modelRoute(): Plugin {
-  return { name: 'echomind-model-route', configurePreviewServer(server) { server.middlewares.use('/api/model', (req, res) => { void handle(req, res) }) } }
+  return { name: 'echomind-model-route', configurePreviewServer(server) { server.middlewares.use('/api/model', (req, res) => { void handleModelRequest(req, res) }) } }
 }

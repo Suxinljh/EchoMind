@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm run build && vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "prepare:model": "node scripts/prepare-model.mjs",
+    "package:macos": "node scripts/package-macos.mjs",
     "prebuild": "npm run prepare:model",
     "build": "tsc -b && vite build",
     "preview": "vite preview"

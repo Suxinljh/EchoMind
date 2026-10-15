@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.vite/
+
+# Local credentials and settings
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Python benchmark environments and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local recordings and large speech models
+benchmarks/private/
+public/models/
+
+# Internal planning and the unused npm lockfile (pnpm is the project lockfile)
+PLAN.md
+package-lock.json

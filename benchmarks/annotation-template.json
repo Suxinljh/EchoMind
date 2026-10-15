@@ -1,0 +1,19 @@
+{
+  "sample_id": "",
+  "authorization_note": "",
+  "scenario": "interview_or_work_report",
+  "verbatim_transcript": "",
+  "filler_events": [
+    {"text": "", "start_s": 0, "end_s": 0}
+  ],
+  "repetition_events": [
+    {"text": "", "start_s": 0, "end_s": 0}
+  ],
+  "silence_events": [
+    {"start_s": 0, "end_s": 0, "context": "thinking_or_sentence_boundary_or_mid_sentence_or_unknown"}
+  ],
+  "semantic_boundaries_s": [],
+  "annotator": "",
+  "reviewer": "",
+  "notes": "Keep original fillers and repeated words; mark uncertainty instead of guessing."
+}

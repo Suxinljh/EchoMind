@@ -1,0 +1,46 @@
+.changelog-shell .sidebar { position: sticky; top: 73px; align-self: start; height: calc(100vh - 73px); }
+.changelog-shell .sidebar-meta { margin-top: auto; }
+.changelog-home-link, .sidebar-link { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 13px; color: var(--app-ink); text-decoration: none; font-size: 13px; font-weight: 600; border-radius: var(--radius-box, 8px); }
+.changelog-home-link:hover, .sidebar-link:hover { background: var(--app-primary-soft); color: var(--app-primary-ink); }
+.sidebar-link svg:last-child { margin-left: auto; }
+.sidebar-meta { margin-top: auto; }
+.sidebar-meta .sidebar-bottom { margin-top: 14px; }
+.changelog-top-back { display: none; align-items: center; gap: 7px; color: var(--app-primary-ink); text-decoration: none; font-size: 13px; font-weight: 600; }
+.changelog-main { padding-top: 42px; }
+.changelog-layout { max-width: 1240px; margin: auto; display: grid; grid-template-columns: minmax(0, 1fr) 245px; gap: 30px; align-items: start; }
+.changelog-intro { margin-bottom: 26px; }
+.changelog-intro h1 { font-size: clamp(32px, 3vw, 42px); line-height: 1.2; margin: 0 0 8px; color: var(--app-ink); }
+.changelog-intro p { margin: 0; color: var(--app-muted); font-size: 15px; }
+.changelog-day { background: var(--app-surface); border: 1px solid var(--app-line); border-radius: var(--radius-box, 14px); padding: 26px 28px 4px; margin-bottom: 18px; }
+.changelog-day h2 { margin: 0; padding-bottom: 20px; border-bottom: 1px solid var(--app-line); color: var(--app-ink); font-size: 19px; }
+.changelog-day h2 small { margin-left: 8px; color: var(--app-muted); font-size: 13px; font-weight: 400; }
+.changelog-entry { display: grid; grid-template-columns: 125px minmax(0, 1fr); gap: 26px; padding: 23px 0; border-bottom: 1px solid var(--app-line); }
+.changelog-entry:last-child { border-bottom: 0; }
+.changelog-entry-meta { display: flex; align-items: flex-start; gap: 8px; padding-top: 3px; color: var(--app-muted); font-size: 13px; border-right: 1px solid var(--app-line); }
+.changelog-dot { display: inline-block; flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--app-muted); }
+.type-更新 { background: var(--app-primary); }
+.type-优化 { background: var(--color-secondary, var(--app-primary)); }
+.type-修复 { background: var(--color-success, #2f9b70); }
+.type-公告 { background: var(--color-warning, #c79439); }
+.changelog-entry-body h3 { margin: 0 0 10px; color: var(--app-ink); font-size: 18px; line-height: 1.45; }
+.changelog-entry-body p, .changelog-entry-body li { color: var(--app-muted); font-size: 14px; line-height: 1.85; }
+.changelog-entry-body p { margin: 0 0 9px; }
+.changelog-entry-body ul { margin: 8px 0 0; padding-left: 20px; }
+.changelog-entry-body li + li { margin-top: 6px; }
+.changelog-filters { position: sticky; top: 96px; display: grid; gap: 16px; }
+.changelog-filters section { background: var(--app-surface); border: 1px solid var(--app-line); border-radius: var(--radius-box, 12px); padding: 16px 13px; }
+.changelog-filters h2 { font-size: 13px; margin: 0 8px 13px; color: var(--app-ink); }
+.changelog-filters button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 37px; padding: 0 9px; border: 0; border-radius: var(--radius-field, 7px); background: transparent; color: var(--app-ink); text-align: left; font-size: 13px; }
+.changelog-filters button:hover, .changelog-filters button.active { background: var(--app-primary-soft); }
+.changelog-filters button span { display: flex; align-items: center; gap: 9px; }
+.changelog-filters button small { color: var(--app-muted); font-size: 12px; }
+.changelog-filters .changelog-dot { margin-top: 0; }
+.changelog-feedback p { margin: 0 8px 11px; color: var(--app-muted); font-size: 12px; line-height: 1.7; }
+.changelog-feedback a { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: var(--app-primary-ink); font-size: 12px; font-weight: 700; text-decoration: none; }
+.changelog-empty { padding: 35px; color: var(--app-muted); background: var(--app-surface); border: 1px solid var(--app-line); border-radius: var(--radius-box, 12px); }
+:root[data-theme="newspaper"] .changelog-day, :root[data-theme="newspaper"] .changelog-filters section, :root[data-theme="newspaper"] .changelog-filters button, :root[data-theme="newspaper"] .changelog-home-link, :root[data-theme="newspaper"] .sidebar-link { border-radius: 0; }
+:root[data-theme="neobrutalism"] .changelog-day, :root[data-theme="neobrutalism"] .changelog-filters section { border: 2px solid var(--app-ink); border-radius: 4px; box-shadow: 4px 4px 0 var(--app-ink); }
+:root[data-theme="neobrutalism"] .changelog-filters button, :root[data-theme="neobrutalism"] .changelog-home-link, :root[data-theme="neobrutalism"] .sidebar-link { border-radius: 2px; }
+@media (max-width: 950px) { .changelog-layout { grid-template-columns: 1fr; } .changelog-filters { position: static; grid-row: 1; display: flex; overflow: auto; } .changelog-filters section { min-width: 220px; } .changelog-feedback { display: none; } }
+@media (max-width: 900px) { .changelog-top-back { display: inline-flex; } }
+@media (max-width: 600px) { .changelog-main { padding-top: 28px; } .changelog-day { padding: 18px 17px 2px; } .changelog-entry { grid-template-columns: 1fr; gap: 8px; } .changelog-entry-meta { border: 0; } .changelog-entry-body h3 { font-size: 17px; } }

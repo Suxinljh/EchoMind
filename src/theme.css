@@ -1,0 +1,279 @@
+/* App colors are bridged to DaisyUI's theme tokens. */
+:root[data-theme] {
+  --app-page: var(--color-base-200);
+  --app-surface: var(--color-base-100);
+  --app-subtle: color-mix(in oklab, var(--color-base-200) 55%, var(--color-base-100));
+  --app-ink: var(--color-base-content);
+  --app-muted: color-mix(in oklab, var(--color-base-content) 64%, var(--color-base-100));
+  --app-line: color-mix(in oklab, var(--color-base-content) 17%, var(--color-base-100));
+  --app-primary: var(--color-primary);
+  --app-on-primary: var(--color-primary-content);
+  --app-primary-soft: color-mix(in oklab, var(--color-primary) 12%, var(--color-base-100));
+  --app-primary-ink: color-mix(in oklab, var(--color-primary) 68%, var(--color-base-content));
+  color: var(--app-ink);
+  background: var(--app-page);
+}
+
+:root[data-theme="newspaper"], .theme-option[data-theme="newspaper"] {
+  --color-base-100: #fbf9f4;
+  --color-base-200: #f7f4ed;
+  --color-base-300: #e9e2d4;
+  --color-base-content: #22201c;
+  --color-primary: #7a1f1f;
+  --color-primary-content: #fffaf2;
+  --color-secondary: #1b2a4a;
+  --color-secondary-content: #fffaf2;
+  --app-line: var(--nui-rule-hairline);
+  --app-muted: var(--nui-text-secondary);
+  color-scheme: light;
+}
+
+:root[data-theme="neobrutalism"], .theme-option[data-theme="neobrutalism"] {
+  --color-base-100: #fffdf5;
+  --color-base-200: #ffedc4;
+  --color-base-300: #f9d685;
+  --color-base-content: #191919;
+  --color-primary: #ff6b4a;
+  --color-primary-content: #191919;
+  --color-secondary: #fbcf4c;
+  --color-secondary-content: #191919;
+  --app-line: #191919;
+  --app-muted: #39332c;
+  --primary: #ff6b4a;
+  --primary-foreground: #191919;
+  --primary-hover: #ef5335;
+  --secondary: #fbcf4c;
+  --secondary-foreground: #191919;
+  --secondary-hover: #f2bf26;
+  color-scheme: light;
+}
+
+:root[data-theme] body { background: var(--app-page); color: var(--app-ink); }
+.brand-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.beta-badge { display: inline-flex; align-items: center; justify-content: center; padding: 3px 8px; border: 1px solid var(--app-line); border-radius: 999px; background: var(--app-primary-soft); color: var(--app-primary-ink); font-size: 11px; font-weight: 700; line-height: 1.2; letter-spacing: .04em; white-space: nowrap; text-decoration: none; }
+.beta-badge:hover { border-color: var(--app-primary); }
+:root[data-theme="newspaper"] .beta-badge { border-radius: 0; }
+:root[data-theme="neobrutalism"] .beta-badge { border: 2px solid var(--app-ink); border-radius: 3px; box-shadow: 2px 2px 0 var(--app-ink); font-weight: 800; }
+:root[data-theme] .topbar,
+:root[data-theme] .sidebar,
+:root[data-theme] .card,
+:root[data-theme] .tip-card,
+:root[data-theme] .analysis-card,
+:root[data-theme] .result-summary,
+:root[data-theme] .result-nav,
+:root[data-theme] .settings-modal,
+:root[data-theme] .mode-modal { background: var(--app-surface); border-color: var(--app-line); color: var(--app-ink); }
+:root[data-theme] .question-card { background: linear-gradient(125deg, var(--app-primary-soft), var(--app-surface) 72%); }
+:root[data-theme] .brand,
+:root[data-theme] .home-page h1,
+:root[data-theme] .setup-page h1,
+:root[data-theme] .practice-page h1,
+:root[data-theme] .results-page h1,
+:root[data-theme] .section-heading h2,
+:root[data-theme] .record-top h3,
+:root[data-theme] .question-card h2,
+:root[data-theme] .result-card h2,
+:root[data-theme] .result-card h3,
+:root[data-theme] .modal-head h2,
+:root[data-theme] .mode-modal h2,
+:root[data-theme] .overall-head h2 { color: var(--app-ink); }
+:root[data-theme] .hero-copy,
+:root[data-theme] .muted,
+:root[data-theme] .sidebar-label,
+:root[data-theme] .sidebar-bottom strong,
+:root[data-theme] .sidebar-bottom p,
+:root[data-theme] .page-topline,
+:root[data-theme] .settings-intro,
+:root[data-theme] .settings-modal>p,
+:root[data-theme] .mode-modal>p,
+:root[data-theme] .field .hint,
+:root[data-theme] .model-notice span,
+:root[data-theme] .result-summary span,
+:root[data-theme] .history-item small,
+:root[data-theme] .overall-copy,
+:root[data-theme] .question-review p,
+:root[data-theme] .rubric-row p,
+:root[data-theme] .transcript-pair p,
+:root[data-theme] .speech-overview p,
+:root[data-theme] .overall-columns ul,
+:root[data-theme] .metrics-note { color: var(--app-muted); }
+:root[data-theme] .field,
+:root[data-theme] .checkbox-group,
+:root[data-theme] .consent-row,
+:root[data-theme] .result-nav button,
+:root[data-theme] .history-item,
+:root[data-theme] .nav-item,
+:root[data-theme] .transcript-area p,
+:root[data-theme] .tip-card,
+:root[data-theme] .analysis-card,
+:root[data-theme] .model-notice strong,
+:root[data-theme] .device-test-head strong,
+:root[data-theme] .report-actions strong { color: var(--app-ink); }
+:root[data-theme] .step-label,
+:root[data-theme] .question-label,
+:root[data-theme] .privacy-chip,
+:root[data-theme] .side-status,
+:root[data-theme] .side-progress,
+:root[data-theme] .sidebar-bottom,
+:root[data-theme] .result-summary strong,
+:root[data-theme] .overall-score,
+:root[data-theme] .speech-overview strong,
+:root[data-theme] .rubric-title span,
+:root[data-theme] .text-button,
+:root[data-theme] .settings-tabs button.active { color: var(--app-primary-ink); }
+:root[data-theme] .primary-button,
+:root[data-theme] .new-practice-button,
+:root[data-theme] .progress-track span,
+:root[data-theme] .device-meter span,
+:root[data-theme] .mic-meter span { background: var(--app-primary); color: var(--app-on-primary); }
+:root[data-theme] .primary-button:hover,
+:root[data-theme] .new-practice-button:hover { background: color-mix(in oklab, var(--app-primary) 85%, var(--app-ink)); }
+:root[data-theme] .secondary-button,
+:root[data-theme] .mode-switch,
+:root[data-theme] .setup-mode-label,
+:root[data-theme] .nav-item.active,
+:root[data-theme] .history-item:hover,
+:root[data-theme] .history-item.active,
+:root[data-theme] .result-nav button.selected,
+:root[data-theme] .score-pill,
+:root[data-theme] .question-number,
+:root[data-theme] .section-icon { background: var(--app-primary-soft); color: var(--app-primary-ink); border-color: var(--app-line); }
+:root[data-theme] .mode-switch button.selected,
+:root[data-theme] .view-toggle button.active { background: var(--app-surface); color: var(--app-primary-ink); }
+:root[data-theme] .mode-switch button,
+:root[data-theme] .setup-mode-label button,
+:root[data-theme] .settings-tabs button,
+:root[data-theme] .icon-button { color: var(--app-muted); }
+:root[data-theme] .settings-tabs { border-color: var(--app-line); }
+:root[data-theme] .settings-tabs button.active { border-color: var(--app-primary); }
+:root[data-theme] .field input,
+:root[data-theme] .field textarea,
+:root[data-theme] .field select,
+:root[data-theme] .device-picker select { background: var(--app-surface); border-color: var(--app-line); color: var(--app-ink); }
+:root[data-theme] .field input::placeholder,
+:root[data-theme] .field textarea::placeholder { color: var(--app-muted); }
+:root[data-theme] .setup-model-row,
+:root[data-theme] .report-notice,
+:root[data-theme] .report-actions,
+:root[data-theme] .privacy-box,
+:root[data-theme] .confirm-panel,
+:root[data-theme] .device-test-card,
+:root[data-theme] .transcript-area,
+:root[data-theme] .transcript-pair>div:first-child,
+:root[data-theme] .question-recap,
+:root[data-theme] .question-review,
+:root[data-theme] .overall-columns>div,
+:root[data-theme] .speech-overview>div,
+:root[data-theme] .next-step { background: var(--app-subtle); border-color: var(--app-line); color: var(--app-ink); }
+:root[data-theme] .result-summary div,
+:root[data-theme] .rubric-list,
+:root[data-theme] .rubric-row,
+:root[data-theme] .coverage-row,
+:root[data-theme] .sidebar-divider,
+:root[data-theme] .sidebar-bottom,
+:root[data-theme] .analysis-card div:not(.stat-group-title) { border-color: var(--app-line); }
+:root[data-theme] .progress-track,
+:root[data-theme] .device-meter,
+:root[data-theme] .mic-meter { background: var(--app-subtle); }
+.brand-logo { display: block; width: 168px; height: 29px; flex: none; }
+:root[data-theme] .brand-logo .logo-symbol { fill: var(--app-primary); }
+:root[data-theme] .brand-logo .logo-wordmark { fill: var(--app-ink); }
+:root[data-theme] .history-item strong,
+:root[data-theme] .mode-options strong { color: var(--app-ink); }
+:root[data-theme] .history-icon,
+:root[data-theme] .result-nav button>span,
+:root[data-theme] .mode-options button>svg { color: var(--app-primary-ink); }
+:root[data-theme] .result-nav small,
+:root[data-theme] .mode-options small { color: var(--app-muted); }
+:root[data-theme] .mode-options button {
+  background: var(--app-surface);
+  border-color: var(--app-line);
+  color: var(--app-ink);
+}
+:root[data-theme] .mode-options button:hover { background: var(--app-primary-soft); border-color: var(--app-primary); }
+:root[data-theme] .history-item,
+:root[data-theme] .result-nav button,
+:root[data-theme] .mode-options button { border-radius: var(--radius-box, 8px); }
+
+.theme-settings .settings-intro { margin-bottom: 14px; }
+.theme-tools { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.theme-tools .field { flex: 1; margin: 0; }
+.theme-tools .text-button { margin-bottom: 10px; flex: none; }
+.theme-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 47vh; overflow: auto; padding: 2px 5px 5px 2px; }
+.theme-option { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 66px; padding: 12px; border: 1px solid var(--app-line); border-radius: 9px; background: var(--color-base-100); color: var(--color-base-content); text-align: left; }
+.theme-option.selected { outline: 2px solid var(--app-primary); outline-offset: 1px; }
+.theme-option-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.theme-option-copy strong { font-size: 12px; }
+.theme-option-copy small { font-size: 10px; opacity: .7; overflow: hidden; text-overflow: ellipsis; }
+.theme-swatches { display: flex; flex: none; gap: 3px; margin-right: 12px; }
+.theme-swatches i { display: block; width: 15px; height: 15px; border-radius: 50%; border: 1px solid color-mix(in oklab, var(--color-base-content) 25%, transparent); }
+.theme-swatches i:nth-child(1) { background: var(--color-primary); }
+.theme-swatches i:nth-child(2) { background: var(--color-secondary); }
+.theme-swatches i:nth-child(3) { background: var(--color-base-200); }
+.theme-check { position: absolute; right: 8px; top: 8px; }
+
+:root[data-theme="newspaper"] { --app-page: var(--nui-bg-page); --app-surface: var(--nui-bg-surface); --app-ink: var(--nui-text-primary); --app-primary: var(--nui-accent-primary); --app-primary-ink: var(--nui-accent-primary); }
+:root[data-theme="newspaper"] body { font-family: var(--font-family-cjk-serif); }
+:root[data-theme="newspaper"] .topbar,
+:root[data-theme="newspaper"] .sidebar,
+:root[data-theme="newspaper"] .card,
+:root[data-theme="newspaper"] .tip-card,
+:root[data-theme="newspaper"] .analysis-card,
+:root[data-theme="newspaper"] .result-summary,
+:root[data-theme="newspaper"] .result-nav,
+:root[data-theme="newspaper"] .settings-modal,
+:root[data-theme="newspaper"] .mode-modal { box-shadow: none; border-radius: 0; }
+:root[data-theme="newspaper"] .brand,
+:root[data-theme="newspaper"] h1,
+:root[data-theme="newspaper"] h2,
+:root[data-theme="newspaper"] h3 { font-family: var(--font-family-cjk-serif); letter-spacing: 0; }
+:root[data-theme="newspaper"] .topbar { border-bottom: 3px double var(--nui-rule-decorative); }
+:root[data-theme="newspaper"] .primary-button,
+:root[data-theme="newspaper"] .secondary-button,
+:root[data-theme="newspaper"] .new-practice-button { border-radius: 0; box-shadow: none; }
+:root[data-theme="newspaper"] .step-label { letter-spacing: .08em; }
+:root[data-theme="newspaper"] .history-item,
+:root[data-theme="newspaper"] .result-nav button,
+:root[data-theme="newspaper"] .mode-options button { border-radius: 0; box-shadow: none; }
+:root[data-theme="newspaper"] .history-item.active,
+:root[data-theme="newspaper"] .result-nav button.selected { border-left: 3px solid var(--app-primary); }
+
+:root[data-theme="neobrutalism"] body { font-family: 'DM Sans', 'Noto Sans SC', sans-serif; }
+:root[data-theme="neobrutalism"] .topbar,
+:root[data-theme="neobrutalism"] .sidebar,
+:root[data-theme="neobrutalism"] .card,
+:root[data-theme="neobrutalism"] .tip-card,
+:root[data-theme="neobrutalism"] .analysis-card,
+:root[data-theme="neobrutalism"] .result-summary,
+:root[data-theme="neobrutalism"] .result-nav,
+:root[data-theme="neobrutalism"] .settings-modal,
+:root[data-theme="neobrutalism"] .mode-modal { border: 2px solid #191919; border-radius: 5px; box-shadow: 5px 5px 0 #191919; }
+:root[data-theme="neobrutalism"] .topbar,
+:root[data-theme="neobrutalism"] .sidebar { border-radius: 0; box-shadow: none; }
+:root[data-theme="neobrutalism"] .primary-button,
+:root[data-theme="neobrutalism"] .secondary-button,
+:root[data-theme="neobrutalism"] .new-practice-button { border: 2px solid #191919; border-radius: 4px; box-shadow: 4px 4px 0 #191919; font-weight: 800; }
+:root[data-theme="neobrutalism"] .primary-button:hover,
+:root[data-theme="neobrutalism"] .secondary-button:hover,
+:root[data-theme="neobrutalism"] .new-practice-button:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #191919; }
+:root[data-theme="neobrutalism"] .primary-button:active,
+:root[data-theme="neobrutalism"] .secondary-button:active,
+:root[data-theme="neobrutalism"] .new-practice-button:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 #191919; }
+:root[data-theme="neobrutalism"] .field input,
+:root[data-theme="neobrutalism"] .field textarea,
+:root[data-theme="neobrutalism"] .field select,
+:root[data-theme="neobrutalism"] .theme-option { border: 2px solid #191919; border-radius: 3px; }
+:root[data-theme="neobrutalism"] h1,
+:root[data-theme="neobrutalism"] h2 { font-weight: 900; letter-spacing: -.04em; }
+:root[data-theme="neobrutalism"] .history-item,
+:root[data-theme="neobrutalism"] .result-nav button,
+:root[data-theme="neobrutalism"] .mode-options button { border-radius: 3px; }
+:root[data-theme="neobrutalism"] .history-item.active,
+:root[data-theme="neobrutalism"] .result-nav button.selected,
+:root[data-theme="neobrutalism"] .mode-options button {
+  border: 2px solid #191919;
+  box-shadow: 3px 3px 0 #191919;
+}
+
+@media (max-width: 600px) { .theme-grid { grid-template-columns: 1fr 1fr; } .theme-tools { align-items: stretch; flex-direction: column; gap: 7px; } .theme-tools .text-button { margin: 0; } }
+@media (max-width: 600px) { .brand-logo { width: 146px; height: auto; } }

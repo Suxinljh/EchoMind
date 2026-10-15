@@ -1,0 +1,13 @@
+export type Mode = 'interview' | 'report'
+export type ViewMode = 'focus' | 'analysis'
+export type Stage = 'home' | 'setup' | 'practice' | 'results'
+export type Provider = { baseUrl: string; apiKey: string; model: string }
+export type Task = { id: string; title: string; prompt: string; jdEvidence?: string; kind: 'intro' | 'professional' | 'candidate' | 'report' }
+export type SpeechEvent = { kind: 'silence' | 'filler'; start: number; end: number; label?: string; source: 'audio-rms' | 'asr-tentative' }
+export type Answer = { taskId: string; raw: string; rawSegments?: string[]; semantic: string; duration: number; events: SpeechEvent[]; status: 'answered' | 'skipped'; confirmedAt: string; evaluation?: Evaluation }
+export type Dimension = { name: string; score: number | null; weight: number; evidence: string; advice: string }
+export type Evaluation = { summary: string; suggestedAnswer?: string; dimensions: Dimension[]; strengths: string[]; nextStep: string; coverage?: { item: string; status: 'covered' | 'partial' | 'missing'; evidence: string }[]; audienceChecks?: { criterion: string; level: number | null; evidence: string }[]; source: 'ai' | 'local'; usage?: { input?: number; output?: number } }
+export type OverallAnalysis = { summary: string; strengths: string[]; priorities: string[] }
+export type Session = { mode: Mode; tasks: Task[]; answers: Answer[]; current: number; createdAt: string; settings: InterviewSettings | ReportSettings; overallAnalysis?: OverallAnalysis }
+export type InterviewSettings = { position: string; jd: string; questionCount: number; includeIntro: boolean; includeCandidate: boolean }
+export type ReportSettings = { topic: string; audience: string; purpose: string; secondaryPurpose: string; outline: string }

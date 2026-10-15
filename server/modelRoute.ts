@@ -3,10 +3,8 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { APICallError, generateText } from 'ai'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import type { Provider } from '../src/types'
-
-type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
-type ModelRequest = { provider: Provider; messages: ChatMessage[]; testOnly?: boolean }
+import { LOCAL_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
+import type { ModelRequest } from '../src/modelProtocol'
 
 function send(res: ServerResponse, status: number, value: unknown) {
   if (res.writableEnded) return
@@ -14,59 +12,13 @@ function send(res: ServerResponse, status: number, value: unknown) {
   res.end(JSON.stringify(value))
 }
 
-function baseURL(provider: Provider): string {
-  const url = new URL(provider.baseUrl.trim())
-  if (url.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(url.hostname)) throw new Error('模型地址需要 HTTPS，或使用本机 localhost')
-  if (url.username || url.password || url.search || url.hash) throw new Error('接口根地址不能包含账号、密码或查询参数')
-  return url.href.replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
-}
-
-function providerMessage(status: number, body: string, apiKey: string): string {
-  let detail = body.trim()
-  let code = ''
-  try {
-    const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown; type?: unknown } | string; message?: unknown; code?: unknown }
-    const error = parsed.error
-    if (error && typeof error === 'object') {
-      code = error.code == null ? '' : String(error.code)
-      detail = typeof error.message === 'string' ? error.message : typeof error.type === 'string' ? error.type : detail
-    } else {
-      code = parsed.code == null ? '' : String(parsed.code)
-      detail = typeof error === 'string' ? error : typeof parsed.message === 'string' ? parsed.message : detail
-    }
-  } catch { /* The provider may return plain text. */ }
-  const safe = (value: string) => (apiKey ? value.replaceAll(apiKey, '[已隐藏 API Key]') : value).replace(/(api[\s_-]*key\s*:\s*)[^\s,;()]+/gi, '$1[已隐藏]')
-  return [`HTTP ${status}`, ...(code ? [`提供商错误码 ${safe(code).slice(0, 100)}`] : []), safe(detail || '服务商未返回错误详情').slice(0, 500)].join(' · ')
-}
-
 async function readRequest(req: IncomingMessage): Promise<ModelRequest> {
   let text = ''
   for await (const chunk of req) {
     text += chunk.toString()
-    if (text.length > 1_000_000) throw new Error('请求内容过大')
+    if (text.length > MAX_REQUEST_BYTES) throw new Error('请求内容过大')
   }
-  const value = JSON.parse(text) as ModelRequest
-  if (!value.provider || !Array.isArray(value.messages) || !value.provider.model?.trim()) throw new Error('模型配置或请求内容不完整')
-  return value
-}
-
-async function checkDeepSeek(provider: Provider, url: string, signal: AbortSignal, setPhase: (value: string) => void) {
-  const headers = { Authorization: `Bearer ${provider.apiKey}` }
-  setPhase('验证 API Key 和模型')
-  const models = await fetch(`${url}/models`, { headers, signal })
-  const modelsBody = await models.text()
-  if (!models.ok) throw new ProviderFailure(models.status, modelsBody)
-  const available = JSON.parse(modelsBody) as { data?: { id?: string }[] }
-  if (!available.data?.some(item => item.id === provider.model.trim())) throw new Error(`模型 ID「${provider.model.trim()}」不在 DeepSeek 当前模型列表中`)
-  setPhase('验证账户余额')
-  const balance = await fetch(`${url}/user/balance`, { headers, signal })
-  const balanceBody = await balance.text()
-  if (!balance.ok) throw new ProviderFailure(balance.status, balanceBody)
-  if ((JSON.parse(balanceBody) as { is_available?: boolean }).is_available === false) throw new Error('DeepSeek 账户余额不可用于 API 调用')
-}
-
-class ProviderFailure extends Error {
-  constructor(readonly status: number, readonly body: string) { super('Provider request failed') }
+  return validateModelRequest(JSON.parse(text), LOCAL_POLICY)
 }
 
 export async function handleModelRequest(req: IncomingMessage, res: ServerResponse) {
@@ -82,9 +34,9 @@ export async function handleModelRequest(req: IncomingMessage, res: ServerRespon
   res.on('close', () => controller.abort())
   try {
     request = await readRequest(req)
-    const url = baseURL(request.provider)
+    const url = normalizeBaseURL(request.provider, LOCAL_POLICY)
     isDeepSeek = new URL(url).hostname === 'api.deepseek.com'
-    const timeoutMs = request.testOnly ? 20000 : 90000
+    const timeoutMs = request.testOnly ? TIMEOUT_MS.test : TIMEOUT_MS.normal
     timer = setTimeout(() => controller.abort(), timeoutMs)
     if (request.testOnly && isDeepSeek) await checkDeepSeek(request.provider, url, controller.signal, value => { phase = value })
     const model = isDeepSeek
@@ -107,7 +59,7 @@ export async function handleModelRequest(req: IncomingMessage, res: ServerRespon
       const verified = isDeepSeek && request?.testOnly && phase === '等待模型生成'
       const detail = verified
         ? 'API Key、模型 ID 和账户余额检查已通过，但 DeepSeek 未在 20 秒内完成生成。可查看 https://status.deepseek.com/ 的服务状态。'
-        : `${phase}超时：本机服务在 ${request?.testOnly ? 20 : 90} 秒内没有得到完整结果。${isDeepSeek ? '可查看 https://status.deepseek.com/ 的服务状态。' : '请检查服务商状态或网络连接。'}`
+        : `${phase}超时：本机服务在 ${request?.testOnly ? TIMEOUT_MS.test / 1000 : TIMEOUT_MS.normal / 1000} 秒内没有得到完整结果。${isDeepSeek ? '可查看 https://status.deepseek.com/ 的服务状态。' : '请检查服务商状态或网络连接。'}`
       send(res, 504, { error: detail })
     }
     else send(res, 400, { error: error instanceof Error ? error.message : String(error) })

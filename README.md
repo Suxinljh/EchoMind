@@ -6,7 +6,7 @@ EchoMind 是一个在浏览器中练习表达的本地应用。它支持模拟�
 
 ## 下载即用（macOS Intel）
 
-从 [GitHub Releases](https://github.com/Suxinljh/EchoMind/releases) 下载 `EchoMind-0.1.0-macos-x64.zip`，解压后双击「Start EchoMind.command」。浏览器会自动打开本机页面；保持终端窗口运行，关闭终端即可停止服务。首次使用时请允许浏览器访问麦克风。发布包内已含本地语音转写模型及 Node.js 运行环境，无需安装 pnpm，也无需另行下载语音模型。
+从 [GitHub Releases](https://github.com/Suxinljh/EchoMind/releases) 下载 `EchoMind-0.1.1-macos-x64.zip`，解压后双击「Start EchoMind.command」。浏览器会自动打开本机页面；保持终端窗口运行，关闭终端即可停止服务。首次使用时请允许浏览器访问麦克风。发布包内已含本地语音转写模型及 Node.js 运行环境，无需安装 pnpm，也无需另行下载语音模型。本版发布的详细说明见 [v0.1.1 发布说明](docs/releases/v0.1.1.md)。
 
 目前发布包面向 **macOS Intel（x64）**。Apple Silicon 设备需安装 Rosetta 2 才能运行这个版本。文字出题和报告分析仍需在设置中配置自己的兼容 OpenAI Chat Completions 的模型服务；发布包不包含 API Key 或在线大模型。
 
@@ -56,7 +56,7 @@ EchoMind 是一个在浏览器中练习表达的本地应用。它支持模拟�
 
 ## 本地运行
 
-需要 Node.js 和 pnpm。克隆仓库后：
+需要 Node.js 和 pnpm。仓库在 `package.json` 中声明了 `packageManager`（pnpm 10.34.5），pnpm 会自动切换到该版本。克隆仓库后：
 
 ```bash
 pnpm install --frozen-lockfile
@@ -114,11 +114,11 @@ Cloudflare Workers Builds 连接此 GitHub 仓库时，生产分支选 `main`，
 
 云端模型服务只接受公开 HTTPS 域名；本机的 `localhost` 模型接口仍可用于本地运行，但 Cloudflare Worker 无法访问用户电脑上的服务。API Key 由浏览器当前标签页提交给本站 Worker，再转发给用户配置的模型服务，不作为构建或运行时密钥保存。
 
-维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。
+维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。打包前会校验 `dist/` 中确实有页面和四个语音模型文件，缺失时直接报错且不产出包。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。
 
 ## 隐私与数据
 
-音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置和语义稿，才会经当前站点的服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。
+音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置、语义稿，以及出题时从 JD 摘录的原文依据（若有），才会经当前站点的服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。
 
 ## 当前边界
 

@@ -1,14 +1,14 @@
 {
   "name": "echomind",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "npm run build && vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "prepare:model": "node scripts/prepare-model.mjs",
     "package:macos": "node scripts/package-macos.mjs",
-    "prebuild": "npm run prepare:model",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/prepare-model.mjs && tsc -b && vite build",
     "build:cloudflare": "ECHOMIND_CLOUDFLARE_BUILD=1 pnpm build && node scripts/clean-cloudflare-assets.mjs",
     "deploy:cloudflare": "pnpm build:cloudflare && wrangler deploy",
     "preview": "vite preview"

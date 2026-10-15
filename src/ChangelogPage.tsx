@@ -5,21 +5,32 @@ import Logo from './Logo'
 import packageJson from '../package.json'
 import './changelog.css'
 
-type ChangeType = '更新' | '优化' | '修复' | '公告'
+type ChangeType = '发布' | '更新' | '优化' | '修复' | '公告'
 type Change = { date: string; type: ChangeType; title: string; description: string; details: string[] }
-const types: ChangeType[] = ['更新', '优化', '修复', '公告']
+const types: ChangeType[] = ['发布', '更新', '优化', '修复', '公告']
+const headingPattern = /^### \[(发布|更新|优化|修复|公告)\] (.+)$/
 const github = 'https://github.com/Suxinljh/EchoMind'
 
 function readChanges(source: string): Change[] {
   const changes: Change[] = []
   let date = ''
+  let warned = false
   for (const raw of source.split(/\r?\n/)) {
     const line = raw.trim()
     if (/^## \d{4}-\d{2}-\d{2}$/.test(line)) {
       date = line.slice(3)
     } else if (line.startsWith('### [') && date) {
-      const match = /^### \[(更新|优化|修复|公告)\] (.+)$/.exec(line)
+      const match = headingPattern.exec(line)
       if (match) changes.push({ date, type: match[1] as ChangeType, title: match[2], description: '', details: [] })
+      else if (changes.length) {
+        // 未知分类不静默丢弃：降级为上一条的正文，保证内容仍可见。
+        const change = changes[changes.length - 1]
+        const text = line.replace(/^###\s*/, '')
+        change.description += (change.description ? '\n' : '') + text
+      } else if (!warned) {
+        warned = true
+        console.warn(`更新日志有无法识别的条目标题，未单独展示：${line}`)
+      }
     } else if (line && changes.length) {
       const change = changes[changes.length - 1]
       if (line.startsWith('- ')) change.details.push(line.slice(2))

@@ -18,6 +18,7 @@
 .changelog-entry:last-child { border-bottom: 0; }
 .changelog-entry-meta { display: flex; align-items: flex-start; gap: 8px; padding-top: 3px; color: var(--app-muted); font-size: 13px; border-right: 1px solid var(--app-line); }
 .changelog-dot { display: inline-block; flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--app-muted); }
+.type-发布 { background: var(--color-info, #3d7fc1); }
 .type-更新 { background: var(--app-primary); }
 .type-优化 { background: var(--color-secondary, var(--app-primary)); }
 .type-修复 { background: var(--color-success, #2f9b70); }

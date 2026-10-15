@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, X } from 'lucide-react'
 import { localEvaluation, offlineTasks, overallScore, questionScore, reportStats, speechStats, tentativeFillers, transcriptParagraphs } from './logic'
 import { captureReportAppearance, createReportHtml } from './reportExport'
 import DeviceSettings from './DeviceSettings'
 import Logo from './Logo'
+import SemanticEditor from './SemanticEditor'
 import packageJson from '../package.json'
 import ThemeSettings from './ThemeSettings'
 import { readTheme, saveTheme, type ThemeId } from './themes'
@@ -19,8 +20,36 @@ const initialProvider: Provider = { baseUrl: '', apiKey: '', model: '' }
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const historyKey = 'echomind-practice-history-v1'
 const providerKey = 'echomind-model-config-v1'
+const HISTORY_WRITE_DELAY_MS = 500
 function newestFirst(items: Session[]): Session[] { return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)) }
-function readHistory(): Session[] { try { const value = JSON.parse(localStorage.getItem(historyKey) || '[]'); return Array.isArray(value) ? newestFirst(value) : [] } catch { return [] } }
+function isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value) }
+// 历史数据可能来自更早的版本或被手动改坏；逐条校验，坏条目丢弃而不是让整页白屏。
+function sanitizeSession(value: unknown): Session | null {
+  if (!isRecord(value)) return null
+  const mode = value.mode
+  if (mode !== 'interview' && mode !== 'report') return null
+  if (!Array.isArray(value.tasks) || !Array.isArray(value.answers)) return null
+  if (!isRecord(value.settings)) return null
+  if (typeof value.createdAt !== 'string' || Number.isNaN(Date.parse(value.createdAt))) return null
+  const tasksOk = value.tasks.every(task => isRecord(task) && typeof task.id === 'string' && typeof task.title === 'string' && typeof task.prompt === 'string')
+  const answersOk = value.answers.every(answer => isRecord(answer)
+    && typeof answer.taskId === 'string'
+    && typeof answer.semantic === 'string'
+    && Array.isArray(answer.events)
+    && (answer.evaluation === undefined || (isRecord(answer.evaluation) && Array.isArray(answer.evaluation.dimensions))))
+  if (!tasksOk || !answersOk) return null
+  if (value.overallAnalysis !== undefined && (!isRecord(value.overallAnalysis) || !Array.isArray(value.overallAnalysis.strengths) || !Array.isArray(value.overallAnalysis.priorities))) return null
+  const tasks = value.tasks as Task[]
+  const raw = typeof value.current === 'number' && Number.isFinite(value.current) ? Math.floor(value.current) : 0
+  return { ...(value as unknown as Session), current: Math.min(Math.max(0, raw), tasks.length) }
+}
+function readHistory(): Session[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(historyKey) || '[]')
+    if (!Array.isArray(value)) return []
+    return newestFirst(value.map(sanitizeSession).filter((item): item is Session => item !== null))
+  } catch { return [] }
+}
 function readProvider(): Provider { try { return { ...initialProvider, ...JSON.parse(localStorage.getItem(providerKey) || '{}'), apiKey: sessionStorage.getItem('echomind-api-key') || '' } } catch { return initialProvider } }
 
 export default function App() {
@@ -41,6 +70,16 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [selectedResult, setSelectedResult] = useState(0)
+  const historyTimer = useRef<number | null>(null)
+  const historyRef = useRef(history)
+  const historyFailed = useRef(false)
+  // 标识当前练习；录音收尾是异步的，切换练习后不能再把旧结果写进新练习。
+  const practiceToken = useRef(0)
+  // 在途模型调用的中止句柄；切换练习或语义稿变化后旧结果不能再写回。
+  const reportAbortRef = useRef<AbortController | null>(null)
+  const sessionRef = useRef(session)
+  historyRef.current = history
+  sessionRef.current = session
   const recorder = useRecorder(stage === 'practice')
   const task = session?.tasks[session.current]
   const readyForAI = !!provider.baseUrl && !!provider.model && privacyConsent
@@ -49,13 +88,33 @@ export default function App() {
   const totalScore = session ? overallScore(session) : null
   const needsAnalysis = !!session && session.answers.some(a => a.status === 'answered') && (session.answers.some(a => a.status === 'answered' && a.evaluation?.source !== 'ai') || !session.overallAnalysis)
   const liveText = recorder.final + recorder.interim
-  const liveStats = speechStats(pending?.raw || liveText)
-  const liveParagraphs = transcriptParagraphs(pending?.segments || [...recorder.segments, recorder.interim])
+  const liveStats = useMemo(() => speechStats(pending?.raw || liveText), [pending?.raw, liveText])
+  const liveParagraphs = useMemo(() => transcriptParagraphs(pending?.segments || [...recorder.segments, recorder.interim]), [pending?.segments, recorder.segments, recorder.interim])
 
   useEffect(() => { localStorage.setItem(providerKey, JSON.stringify({ baseUrl: provider.baseUrl, model: provider.model })); sessionStorage.setItem('echomind-api-key', provider.apiKey) }, [provider])
   useEffect(() => { sessionStorage.setItem('echomind-model-consent', privacyConsent ? 'yes' : 'no') }, [privacyConsent])
   useEffect(() => { document.documentElement.dataset.theme = theme; saveTheme(theme) }, [theme])
-  useEffect(() => { if (!session) return; setHistory(current => { const next = newestFirst([session, ...current.filter(item => item.createdAt !== session.createdAt)]); try { localStorage.setItem(historyKey, JSON.stringify(next)) } catch { setNotice('浏览器存储空间不足，练习历史未保存。') } return next }) }, [session])
+  useEffect(() => { if (!session) return; setHistory(current => newestFirst([session, ...current.filter(item => item.createdAt !== session.createdAt)])) }, [session])
+  // 写入 localStorage 放在 effect 主体内防抖，避免在 setState 更新函数里做副作用（StrictMode 会执行两次）。
+  useEffect(() => {
+    if (!history.length) return
+    if (historyTimer.current !== null) window.clearTimeout(historyTimer.current)
+    historyTimer.current = window.setTimeout(() => {
+      historyTimer.current = null
+      try {
+        localStorage.setItem(historyKey, JSON.stringify(history))
+        if (historyFailed.current) { historyFailed.current = false; setNotice('练习历史已恢复保存。') }
+      } catch { historyFailed.current = true; setNotice('浏览器存储空间不足，练习历史未保存。') }
+    }, HISTORY_WRITE_DELAY_MS)
+    return () => { if (historyTimer.current !== null) { window.clearTimeout(historyTimer.current); historyTimer.current = null } }
+  }, [history])
+  useEffect(() => () => {
+    if (historyTimer.current === null) return
+    window.clearTimeout(historyTimer.current); historyTimer.current = null
+    try { localStorage.setItem(historyKey, JSON.stringify(historyRef.current)) } catch { /* 忽略：卸载时的兜底写入失败不影响后续使用。 */ }
+  }, [])
+  // 练习变化或组件卸载时中止在途的模型调用，既避免旧结果写回新练习，也避免继续计费。
+  useEffect(() => () => { cancelReportEvaluation() }, [session?.createdAt])
 
   async function createSession() {
     setNotice('')
@@ -68,12 +127,17 @@ export default function App() {
       catch (error) { tasks = offlineTasks(mode, interview); setNotice(`AI 出题失败，已使用基础问题：${error instanceof Error ? error.message : String(error)}`) }
     } else tasks = offlineTasks(mode, mode === 'interview' ? interview : report)
     setSession({ mode, tasks, answers: [], current: 0, settings: mode === 'interview' ? { ...interview } : { ...report }, createdAt: new Date().toISOString() })
+    practiceToken.current += 1
+    cancelReportEvaluation()
     setStage('practice'); setPending(null); setBusy(false)
   }
 
   async function stopRecording() {
+    const token = practiceToken.current
     const result = await recorder.finish()
-    setPending({ ...result, semantic: transcriptParagraphs(result.segments.length ? result.segments : [result.raw]).join('\n\n') })
+    // 收尾有超时兜底，返回时练习可能已被切换；此时不能把旧结果写成新练习的待确认回答。
+    if (token !== practiceToken.current) { setNotice('练习已切换，本次录音结果未写入。'); return }
+    setPending({ raw: result.raw, segments: result.segments, semantic: transcriptParagraphs(result.segments.length ? result.segments : [result.raw]).join('\n\n'), duration: result.duration, events: result.events })
     if (!result.raw.trim()) setNotice(recorder.peakLevel < 4 ? '未识别到文字，且麦克风输入电平很低。请检查下方麦克风设备，换一个设备后重录。' : '录到了麦克风信号，但模型没有输出文字。请先点“重新转写”；仍为空可换麦克风重录。')
   }
 
@@ -96,59 +160,113 @@ export default function App() {
     }
     if (status === 'answered') answer.evaluation = localEvaluation(task, answer)
     const next = { ...session, answers: [...session.answers, answer], current: session.current + 1 }
-    setSession(next); setPending(null); setNotice('')
+    setSession(next); setPending(null); setNotice(''); recorder.release()
     if (next.current >= next.tasks.length) { setStage('results'); setSelectedResult(0) }
     if (status === 'answered' && readyForAI) void runEvaluation(next, answer)
+  }
+
+  function cancelReportEvaluation() {
+    const controller = reportAbortRef.current
+    if (!controller) return
+    reportAbortRef.current = null
+    controller.abort()
+  }
+
+  // 写回前用当前会话核对：原练习已被切换、或语义稿已被改写时，明确告知而不是悄悄丢弃结果。
+  function evaluationTargetChanged(target: Session, answer: Answer): boolean {
+    if (sessionRef.current?.createdAt !== target.createdAt) { setNotice('原练习已切换，本次评估结果未写回。'); return true }
+    const fresh = sessionRef.current.answers.find(saved => saved.taskId === answer.taskId)
+    if (!fresh || fresh.semantic !== answer.semantic) { setNotice('语义稿已修改，本次评估结果未写回，请重新评估。'); return true }
+    return false
   }
 
   async function runEvaluation(target: Session, answer: Answer) {
     const item = target.tasks.find(t => t.id === answer.taskId)
     if (!item || !readyForAI) return
+    cancelReportEvaluation()
+    const controller = new AbortController()
+    reportAbortRef.current = controller
     try {
-      const evaluation = await (await import('./ai')).evaluate(provider, item, answer, target.settings)
+      const evaluation = await (await import('./ai')).evaluate(provider, item, answer, target.settings, controller.signal)
+      if (evaluationTargetChanged(target, answer)) return
       setSession(current => current?.createdAt === target.createdAt ? { ...current, overallAnalysis: undefined, answers: current.answers.map(a => a.taskId === answer.taskId && a.semantic === answer.semantic ? { ...a, evaluation } : a) } : current)
-    } catch (error) { setNotice(`评估失败：${error instanceof Error ? error.message : String(error)}。回答已保存，可在报告中重试。`) }
+    } catch (error) {
+      if (controller.signal.aborted) { setNotice('已取消本次评估。'); return }
+      setNotice(`评估失败：${error instanceof Error ? error.message : String(error)}。回答已保存，可在报告中重试。`)
+    } finally { if (reportAbortRef.current === controller) reportAbortRef.current = null }
   }
 
   function editSemantic(taskId: string, value: string) {
-    setSession(current => current ? { ...current, overallAnalysis: undefined, answers: current.answers.map(a => a.taskId === taskId ? { ...a, semantic: value, evaluation: localEvaluation(current.tasks.find(t => t.id === taskId)!, { ...a, semantic: value }) } : a) } : current)
+    setSession(current => {
+      if (!current) return current
+      const item = current.tasks.find(t => t.id === taskId)
+      if (!item) return current
+      return { ...current, overallAnalysis: undefined, answers: current.answers.map(a => a.taskId === taskId ? { ...a, semantic: value, evaluation: localEvaluation(item, { ...a, semantic: value }) } : a) }
+    })
   }
 
-  function startNew(mode: Mode) { setMode(mode); setSession(null); setPending(null); setStage('setup'); setNotice(''); setModePickerOpen(false) }
-  function openHistory(item: Session) { setSession(item); setMode(item.mode); setPending(null); setSelectedResult(0); setStage(item.current >= item.tasks.length ? 'results' : 'practice'); setNotice('') }
+  function startNew(mode: Mode) { practiceToken.current += 1; cancelReportEvaluation(); setMode(mode); setSession(null); setPending(null); setStage('setup'); setNotice(''); setModePickerOpen(false) }
+  function openHistory(item: Session) {
+    practiceToken.current += 1
+    cancelReportEvaluation()
+    setSession(item); setMode(item.mode); setPending(null); setSelectedResult(0)
+    setStage(item.tasks.length === 0 || item.current >= item.tasks.length ? 'results' : 'practice')
+    setNotice('')
+  }
 
   async function evaluateReport() {
     if (!session) return
     if (!readyForAI) { setSettingsOpen(true); return }
-    setBusy(true); setNotice('正在生成分析报告…')
+    cancelReportEvaluation()
+    const controller = new AbortController()
+    reportAbortRef.current = controller
+    setBusy(true)
+    // 只补全还没有 AI 评价的题目，避免重复计费。
+    const targets = session.answers.filter(item => item.status === 'answered' && item.semantic.trim() && item.evaluation?.source !== 'ai')
     let failures = 0
     let firstError = ''
     const updatedAnswers = [...session.answers]
-    for (const answer of session.answers.filter(item => item.status === 'answered' && item.semantic.trim() && item.evaluation?.source !== 'ai')) {
-      const item = session.tasks.find(task => task.id === answer.taskId)
-      if (!item) continue
-      try {
-        const evaluation = await (await import('./ai')).evaluate(provider, item, answer, session.settings)
-        const index = updatedAnswers.findIndex(saved => saved.taskId === answer.taskId)
-        if (index >= 0) updatedAnswers[index] = { ...answer, evaluation }
-        setSession(current => current?.createdAt === session.createdAt ? { ...current, answers: current.answers.map(saved => saved.taskId === answer.taskId && saved.semantic === answer.semantic ? { ...saved, evaluation } : saved) } : current)
-      } catch (error) { failures++; if (!firstError) firstError = error instanceof Error ? error.message : String(error) }
+    const writeAnswer = (answer: Answer, evaluation: Answer['evaluation']) => {
+      if (evaluationTargetChanged(session, answer)) return
+      setSession(current => current?.createdAt === session.createdAt ? { ...current, answers: current.answers.map(saved => saved.taskId === answer.taskId && saved.semantic === answer.semantic ? { ...saved, evaluation } : saved) } : current)
     }
-    if (!failures && updatedAnswers.some(answer => answer.status === 'answered')) {
-      try {
-        const overallAnalysis = await (await import('./ai')).analyzeSession(provider, { ...session, answers: updatedAnswers })
-        setSession(current => current?.createdAt === session.createdAt ? { ...current, overallAnalysis } : current)
-      } catch (error) { failures++; firstError = error instanceof Error ? error.message : String(error) }
+    try {
+      for (const [index, answer] of targets.entries()) {
+        const item = session.tasks.find(task => task.id === answer.taskId)
+        if (!item) continue
+        setNotice(`正在评估 ${index + 1}/${targets.length}…`)
+        try {
+          const evaluation = await (await import('./ai')).evaluate(provider, item, answer, session.settings, controller.signal)
+          const position = updatedAnswers.findIndex(saved => saved.taskId === answer.taskId)
+          if (position >= 0) updatedAnswers[position] = { ...answer, evaluation }
+          writeAnswer(answer, evaluation)
+        } catch (error) { failures++; if (!firstError) firstError = error instanceof Error ? error.message : String(error) }
+        if (controller.signal.aborted) { setNotice('已取消本次评估。'); return }
+      }
+      if (!failures && updatedAnswers.some(answer => answer.status === 'answered')) {
+        setNotice('正在生成整场分析…')
+        try {
+          const overallAnalysis = await (await import('./ai')).analyzeSession(provider, { ...session, answers: updatedAnswers }, controller.signal)
+          if (sessionRef.current?.createdAt === session.createdAt) setSession(current => current?.createdAt === session.createdAt ? { ...current, overallAnalysis } : current)
+          else setNotice('原练习已切换，整场分析未写回。')
+        } catch (error) { failures++; firstError = error instanceof Error ? error.message : String(error) }
+      }
+    } finally {
+      if (reportAbortRef.current === controller) reportAbortRef.current = null
+      setBusy(false)
     }
-    setBusy(false); setNotice(failures ? `报告有 ${failures} 处未完成：${firstError}` : '分析报告已更新。')
+    if (controller.signal.aborted) { setNotice('已取消本次评估。'); return }
+    setNotice(failures ? `报告有 ${failures} 处未完成：${firstError}` : '分析报告已更新。')
   }
 
   function exportReport(open: boolean) {
     if (!session) return
     const url = URL.createObjectURL(new Blob([createReportHtml(session, captureReportAppearance(theme))], { type: 'text/html;charset=utf-8' }))
     if (open) {
-      const tab = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!tab) setNotice('浏览器拦截了新标签页，请使用下载。')
+      // 指定 noopener 时 window.open 按规范一定返回 null，无法据此判断是否被拦截。
+      const tab = window.open(url, '_blank')
+      if (tab) tab.opener = null
+      else setNotice('浏览器拦截了新标签页，请使用下载。')
     } else {
       const link = document.createElement('a')
       link.href = url; link.download = `EchoMind-练习报告-${session.createdAt.slice(0, 10)}.html`; link.click()
@@ -167,7 +285,7 @@ export default function App() {
         <button className="new-practice-button" onClick={() => setModePickerOpen(true)}><Plus size={18}/> 新建练习</button>
         <div className="sidebar-divider"/>
         <div className="sidebar-label">练习历史</div>
-        {history.length === 0 ? <div className="empty-history">没有历史，快速开始</div> : <div className="history-list">{history.map(item => <button key={item.createdAt} className={`history-item ${session?.createdAt === item.createdAt ? 'active' : ''}`} onClick={() => openHistory(item)}><span className="history-icon">{item.mode === 'interview' ? <Target size={16}/> : <FileText size={16}/>}</span><span><strong>{item.mode === 'interview' ? (item.settings as InterviewSettings).position || '模拟面试' : (item.settings as ReportSettings).topic || '工作汇报'}</strong><small>{new Date(item.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.current >= item.tasks.length ? '已完成' : `${item.current}/${item.tasks.length} 环节`}</small></span></button>)}</div>}
+        {history.length === 0 ? <div className="empty-history">没有历史，快速开始</div> : <div className="history-list">{history.map(item => <button key={item.createdAt} className={`history-item ${session?.createdAt === item.createdAt ? 'active' : ''}`} onClick={() => openHistory(item)}><span className="history-icon">{item.mode === 'interview' ? <Target size={16}/> : <FileText size={16}/>}</span><span><strong>{item.mode === 'interview' ? (item.settings as InterviewSettings).position || '模拟面试' : (item.settings as ReportSettings).topic || '工作汇报'}</strong><small>{new Date(item.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.tasks.length === 0 || item.current >= item.tasks.length ? '已完成' : `${item.current}/${item.tasks.length} 环节`}</small></span></button>)}</div>}
         <div className="sidebar-meta"><a className="sidebar-link" href="/changelog"><BookOpen size={17}/> 更新日志 <ChevronRight size={14}/></a><a className="sidebar-link" href="https://github.com/Suxinljh/EchoMind" target="_blank" rel="noopener noreferrer"><GitBranch size={17}/> GitHub <ExternalLink size={14}/></a><div className="sidebar-bottom"><ShieldCheck size={18}/><div><strong>隐私优先</strong><p>音频在浏览器内处理。练习文字保存在本机浏览器；启用模型后才会发送指定文字。</p></div></div></div>
       </aside>
       <main className="main-area">
@@ -212,6 +330,7 @@ export default function App() {
                 {(recorder.status === 'recording' || recorder.status === 'paused' || pending) && <div className="mic-line"><span>模型已处理 {formatTime(recorder.processedSeconds)} / 已录制 {formatTime(pending?.duration ?? recorder.duration)}</span><span>{recorder.inputLevel > 3 ? '检测到输入' : '输入很弱'}</span></div>}
               </div>
               {recorder.captureError && <div className="audio-warning"><CircleHelp size={15}/> 麦克风无法打开：{recorder.captureError}。检查浏览器权限后可重试。</div>}
+              {recorder.recorderNotice && <div className="audio-warning"><CircleHelp size={15}/> {recorder.recorderNotice}</div>}
               {recorder.signalWarning && recorder.status === 'recording' && <div className="audio-warning"><CircleHelp size={15}/> 连续 4 秒没有检测到明显的麦克风输入。请检查 Chrome 的麦克风权限和当前输入设备。</div>}
               {recorder.status === 'recording' && recorder.duration - recorder.processedSeconds > 8 && <div className="audio-warning"><CircleHelp size={15}/> 语音模型处理落后录音超过 8 秒。可以先结束回答，等待剩余音频处理完成。</div>}
               {pending && !pending.raw.trim() && <div className="audio-warning"><CircleHelp size={15}/> 本次原始转写为空。可重新处理已录制音频，或选择麦克风后重录。请不要直接确认空白回答。</div>}
@@ -236,7 +355,7 @@ export default function App() {
                 <p className="transcript-help">修订后仅更新内容评估。原始录音事件与时长保持不变。</p>
                 <div className="transcript-pair">
                   <div><strong>原始转写</strong><div className="transcript-paragraphs">{transcriptParagraphs(selected.answer.rawSegments?.length ? selected.answer.rawSegments : [selected.answer.raw]).map((paragraph, i) => <p key={i}>{paragraph}</p>)}{!selected.answer.raw && <p>无原始转写</p>}</div></div>
-                  <label className="semantic-editor"><strong>语义稿 · 可修订</strong><textarea rows={8} value={selected.answer.semantic} onChange={e => editSemantic(selected.answer!.taskId, e.target.value)}/></label>
+                  <label className="semantic-editor"><strong>语义稿 · 可修订</strong><SemanticEditor key={selected.answer.taskId} taskId={selected.answer.taskId} value={selected.answer.semantic} onChange={editSemantic}/></label>
                 </div>
                 {readyForAI && <div className="transcript-actions"><button className="secondary-button" onClick={() => runEvaluation(session, selected.answer!)}><RotateCcw size={15}/> 评估此版本</button></div>}
               </section><section className="metrics-note">语气词识别 {tentativeFillers(selected.answer.raw)} 次 · 长停顿 {selected.answer.events.filter(e => e.kind === 'silence').length} 次 · 有效时长 {formatTime(selected.answer.duration)}。这些指标仅供参考，不参与评分。</section></>}</div></div></div>}
@@ -246,6 +365,6 @@ export default function App() {
     {modePickerOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setModePickerOpen(false) }}><div className="mode-modal" role="dialog" aria-modal="true" aria-label="选择练习类型"><div className="modal-head"><div><h2>选择练习类型</h2></div><button className="icon-button" aria-label="关闭" onClick={() => setModePickerOpen(false)}><X size={20}/></button></div><p>选择场景后进入配置页面。</p><div className="mode-options"><button onClick={() => startNew('interview')}><Target size={22}/><span><strong>模拟面试</strong><small>根据岗位和 JD 练习逐题回答</small></span><ArrowRight size={17}/></button><button onClick={() => startNew('report')}><FileText size={22}/><span><strong>工作汇报</strong><small>围绕主题和听众练习连续表达</small></span><ArrowRight size={17}/></button></div></div></div>}
     {settingsOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSettingsOpen(false) }}><div className="settings-modal" role="dialog" aria-modal="true" aria-label="设置"><div className="modal-head"><div><h2>设置</h2></div><button className="icon-button" aria-label="关闭" onClick={() => setSettingsOpen(false)}><X size={20}/></button></div>
       <div className="settings-tabs" role="tablist" aria-label="设置类型"><button id="model-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'model'} aria-controls="model-settings-panel" className={settingsTab === 'model' ? 'active' : ''} onClick={() => setSettingsTab('model')}>模型设置</button><button id="device-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'device'} aria-controls="device-settings-panel" className={settingsTab === 'device' ? 'active' : ''} onClick={() => setSettingsTab('device')}>设备设置</button><button id="theme-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'theme'} aria-controls="theme-settings-panel" className={settingsTab === 'theme' ? 'active' : ''} onClick={() => setSettingsTab('theme')}>主题风格</button></div>
-      {settingsTab === 'model' ? <div role="tabpanel" id="model-settings-panel" aria-labelledby="model-settings-tab"><p className="settings-intro">填写兼容 OpenAI Chat Completions 的服务。接口地址和模型 ID 保存在本机浏览器；API Key 保存在当前标签页会话中，调用时经当前网站的服务转发给提供商。</p><label className="field">接口根地址<input value={provider.baseUrl} onChange={e => setProvider({ ...provider, baseUrl: e.target.value })} placeholder="https://example.com/v1"/></label><label className="field">模型 ID<input value={provider.model} onChange={e => setProvider({ ...provider, model: e.target.value })} placeholder="你的模型名称"/></label><label className="field">API Key<input type="password" autoComplete="off" value={provider.apiKey} onChange={e => setProvider({ ...provider, apiKey: e.target.value })} placeholder="仅保存在当前标签页会话"/></label><div className="privacy-box"><ShieldCheck size={20}/><div><strong>发送范围</strong><p>出题时发送岗位和 JD；评估时发送题目、场景设置和可编辑的语义稿。音频与原始转写不会发送。服务商可能保存或计费，请查看其条款。</p></div></div><label className="consent-row"><input type="checkbox" checked={privacyConsent} onChange={e => setPrivacyConsent(e.target.checked)}/> 我同意将上述文字发送给我配置的服务商</label><div className="modal-actions"><span>{providerState}</span><button className="secondary-button" disabled={!privacyConsent || !provider.baseUrl || !provider.model || busy} onClick={async () => { setBusy(true); setProviderState('正在测试，最多等待 20 秒…'); try { await (await import('./ai')).testProvider(provider); setProviderState('连接成功') } catch (error) { setProviderState(error instanceof Error ? error.message : String(error)) } finally { setBusy(false) } }}>测试连接</button><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></div> : settingsTab === 'device' ? <><DeviceSettings/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></> : <><ThemeSettings selected={theme} onSelect={setTheme}/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></>}</div></div>}
+      {settingsTab === 'model' ? <div role="tabpanel" id="model-settings-panel" aria-labelledby="model-settings-tab"><p className="settings-intro">填写兼容 OpenAI Chat Completions 的服务。接口地址和模型 ID 保存在本机浏览器；API Key 保存在当前标签页会话中，调用时经当前网站的服务转发给提供商。</p><label className="field">接口根地址<input value={provider.baseUrl} onChange={e => setProvider({ ...provider, baseUrl: e.target.value })} placeholder="https://example.com/v1"/></label><label className="field">模型 ID<input value={provider.model} onChange={e => setProvider({ ...provider, model: e.target.value })} placeholder="你的模型名称"/></label><label className="field">API Key<input type="password" autoComplete="off" value={provider.apiKey} onChange={e => setProvider({ ...provider, apiKey: e.target.value })} placeholder="仅保存在当前标签页会话"/></label><div className="privacy-box"><ShieldCheck size={20}/><div><strong>发送范围</strong><p>出题时发送岗位和 JD；评估时发送题目、场景设置、可编辑的语义稿，以及出题时从 JD 摘录的原文依据（若有）。音频与原始转写不会发送。服务商可能保存或计费，请查看其条款。</p></div></div><label className="consent-row"><input type="checkbox" checked={privacyConsent} onChange={e => setPrivacyConsent(e.target.checked)}/> 我同意将上述文字发送给我配置的服务商</label><div className="modal-actions"><span>{providerState}</span><button className="secondary-button" disabled={!privacyConsent || !provider.baseUrl || !provider.model || busy} onClick={async () => { setBusy(true); setProviderState('正在测试，最多等待 20 秒…'); try { await (await import('./ai')).testProvider(provider); setProviderState('连接成功') } catch (error) { setProviderState(error instanceof Error ? error.message : String(error)) } finally { setBusy(false) } }}>测试连接</button><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></div> : settingsTab === 'device' ? <><DeviceSettings/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></> : <><ThemeSettings selected={theme} onSelect={setTheme}/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></>}</div></div>}
   </div>
 }

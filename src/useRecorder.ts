@@ -4,10 +4,16 @@ import { readMicrophonePreference } from './microphonePreference'
 
 type RecorderStatus = 'loading' | 'ready' | 'recording' | 'paused' | 'finishing' | 'error'
 
+// 收尾与重新转写必须最终兑现，否则界面会永久停在「正在收尾转写…」。
+const FINISH_TIMEOUT_MS = 15000
+// 输入电平与时长只用于展示，合并提交以降低录音期间的渲染频率。
+const DISPLAY_INTERVAL_MS = 100
+
 export function useRecorder(enabled: boolean) {
   const [status, setStatus] = useState<RecorderStatus>('loading')
   const [detail, setDetail] = useState('准备语音模型')
   const [captureError, setCaptureError] = useState('')
+  const [recorderNotice, setRecorderNotice] = useState('')
   const [final, setFinal] = useState('')
   const [interim, setInterim] = useState('')
   const [segments, setSegments] = useState<string[]>([])
@@ -36,6 +42,8 @@ export function useRecorder(enabled: boolean) {
   const deviceIdRef = useRef(readMicrophonePreference().id)
   const peakRef = useRef(0)
   const noSignalSeconds = useRef(0)
+  const displayTimer = useRef<number | null>(null)
+  const displayPending = useRef<{ duration: number; level: number; peak: number } | null>(null)
 
   function changeStatus(next: RecorderStatus) { statusRef.current = next; setStatus(next) }
   function addEvent(item: SpeechEvent) { eventsRef.current = [...eventsRef.current, item]; setEvents(eventsRef.current) }
@@ -43,6 +51,36 @@ export function useRecorder(enabled: boolean) {
     const start = silenceStart.current
     if (start !== null && end - start >= 1) addEvent({ kind: 'silence', start, end, source: 'audio-rms' })
     silenceStart.current = null; setSilenceHint(false)
+  }
+
+  function flushDisplay() {
+    displayTimer.current = null
+    const value = displayPending.current
+    if (!value) return
+    displayPending.current = null
+    setDuration(value.duration); setInputLevel(value.level); setPeakLevel(value.peak)
+  }
+  function queueDisplay(value: { duration: number; level: number; peak: number }) {
+    displayPending.current = value
+    if (displayTimer.current !== null) return
+    displayTimer.current = window.setTimeout(flushDisplay, DISPLAY_INTERVAL_MS)
+  }
+  // 收尾或重新转写期间的故障要兑现挂起的 Promise 并回到可用状态。
+  function failWorker(message: string) {
+    setDetail(message)
+    const pendingFinish = finishResolve.current
+    finishResolve.current = null
+    if (pendingFinish) { setRecorderNotice(message); pendingFinish(finalRef.current + interimRef.current); changeStatus('ready') }
+    else changeStatus('error')
+  }
+  function awaitTranscript(message: { type: string }) {
+    return new Promise<string>(resolve => {
+      let settled = false
+      const done = (text: string) => { if (settled) return; settled = true; if (finishResolve.current === done) finishResolve.current = null; resolve(text) }
+      finishResolve.current = done
+      worker.current?.postMessage(message)
+      window.setTimeout(() => done(finalRef.current + interimRef.current), FINISH_TIMEOUT_MS)
+    })
   }
 
   useEffect(() => {
@@ -55,14 +93,38 @@ export function useRecorder(enabled: boolean) {
     w.onmessage = event => {
       const m = event.data
       if (m.type === 'loading') setDetail(m.detail)
-      if (m.type === 'progress') setProcessedSeconds(m.processedSeconds)
+      if (m.type === 'progress') { setProcessedSeconds(m.processedSeconds); if (m.bufferedTruncated) setRecorderNotice('录音超过 20 分钟，重新转写只能覆盖前 20 分钟的内容。') }
       if (m.type === 'ready') { changeStatus('ready'); setDetail('本地语音模型已就绪') }
-      if (m.type === 'error') { changeStatus('error'); setDetail(m.detail); finishResolve.current?.(finalRef.current + interimRef.current); finishResolve.current = null }
+      if (m.type === 'error') failWorker(m.detail || '语音模型处理失败。')
       if (m.type === 'transcript') { finalRef.current = m.final; interimRef.current = m.interim; segmentsRef.current = m.segments || []; setFinal(m.final); setInterim(m.interim); setSegments(segmentsRef.current) }
-      if (m.type === 'finished') { finalRef.current = m.text; interimRef.current = ''; segmentsRef.current = m.segments || []; setFinal(m.text); setInterim(''); setSegments(segmentsRef.current); setProcessedSeconds(m.processedSeconds); finishResolve.current?.(m.text); finishResolve.current = null; changeStatus('ready') }
+      if (m.type === 'finished') {
+        finalRef.current = m.text; interimRef.current = ''; segmentsRef.current = m.segments || []
+        setFinal(m.text); setInterim(''); setSegments(segmentsRef.current); setProcessedSeconds(m.processedSeconds)
+        if (m.truncated) setRecorderNotice('录音超过 20 分钟，本次重新转写只覆盖前 20 分钟，建议分次练习。')
+        const pendingFinish = finishResolve.current
+        finishResolve.current = null
+        pendingFinish?.(m.text)
+        changeStatus('ready')
+      }
     }
+    // 工作线程崩溃或消息反序列化失败时，不能让状态停留在「准备语音模型」或「正在收尾转写」。
+    w.onerror = event => failWorker(event instanceof ErrorEvent && event.message ? event.message : '语音模型工作线程异常退出。')
+    w.onmessageerror = () => failWorker('语音模型返回了无法读取的数据。')
     w.postMessage({ type: 'init' })
-    return () => { navigator.mediaDevices.removeEventListener('devicechange', refresh); w.terminate(); audio.current?.stream.getTracks().forEach(t => t.stop()); void audio.current?.context.close(); audio.current = null }
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', refresh)
+      // 卸载或离开练习页时兑现挂起的收尾 Promise，避免调用方永久等待。
+      const pendingFinish = finishResolve.current
+      finishResolve.current = null
+      pendingFinish?.(finalRef.current + interimRef.current)
+      if (displayTimer.current !== null) { window.clearTimeout(displayTimer.current); displayTimer.current = null; displayPending.current = null }
+      if (worker.current === w) worker.current = null
+      w.terminate()
+      audio.current?.stream.getTracks().forEach(t => t.stop())
+      void audio.current?.context.close()
+      audio.current = null
+      changeStatus('loading')
+    }
   }, [enabled])
 
   useEffect(() => {
@@ -80,7 +142,7 @@ export function useRecorder(enabled: boolean) {
     let streamForCleanup: MediaStream | null = null
     let contextForCleanup: AudioContext | null = null
     try {
-      setCaptureError('')
+      setCaptureError(''); setRecorderNotice('')
       let selectedId = deviceIdRef.current
       const preference = readMicrophonePreference()
       if (selectedId && selectedId === preference.id && preference.label) {
@@ -120,13 +182,13 @@ export function useRecorder(enabled: boolean) {
         const samples = event.data as Float32Array
         const startTime = activeTime.current
         activeTime.current += samples.length / context.sampleRate
-        setDuration(activeTime.current)
         let energy = 0
         for (const sample of samples) energy += sample * sample
         const rms = Math.sqrt(energy / samples.length)
         const level = Math.min(100, Math.round(rms * 1200))
-        setInputLevel(level)
-        if (level > peakRef.current) { peakRef.current = level; setPeakLevel(level) }
+        if (level > peakRef.current) peakRef.current = level
+        // 时长、电平与峰值合并提交，避免每个音频块都触发整页重渲染。
+        queueDisplay({ duration: activeTime.current, level, peak: peakRef.current })
         if (rms < 0.003) noSignalSeconds.current += samples.length / context.sampleRate
         else noSignalSeconds.current = 0
         if (noSignalSeconds.current > 4) setSignalWarning(true)
@@ -147,18 +209,22 @@ export function useRecorder(enabled: boolean) {
   const finish = useCallback(async () => {
     if (statusRef.current !== 'recording' && statusRef.current !== 'paused') return { raw: finalRef.current + interimRef.current, segments: segmentsRef.current, duration: activeTime.current, events: eventsRef.current }
     closeSilence(activeTime.current); changeStatus('finishing')
+    if (displayTimer.current !== null) { window.clearTimeout(displayTimer.current); displayTimer.current = null; displayPending.current = null }
     const current = audio.current
     if (current) { current.node.port.postMessage('flush'); await new Promise(resolve => setTimeout(resolve, 80)); current.node.disconnect(); current.source.disconnect(); current.stream.getTracks().forEach(t => t.stop()); await current.context.close(); audio.current = null }
-    const raw = await new Promise<string>(resolve => { finishResolve.current = resolve; worker.current?.postMessage({ type: 'finish' }) })
+    const raw = await awaitTranscript({ type: 'finish' })
     return { raw, segments: segmentsRef.current, duration: activeTime.current, events: eventsRef.current }
   }, [])
 
   const retryTranscription = useCallback(async () => {
     if (statusRef.current !== 'ready') return { raw: finalRef.current, segments: segmentsRef.current }
     changeStatus('finishing')
-    const raw = await new Promise<string>(resolve => { finishResolve.current = resolve; worker.current?.postMessage({ type: 'replay' }) })
+    const raw = await awaitTranscript({ type: 'replay' })
     return { raw, segments: segmentsRef.current }
   }, [])
+
+  // 回答已确认，通知工作线程释放重转所需的音频缓冲。
+  const release = useCallback(() => { worker.current?.postMessage({ type: 'reset' }) }, [])
 
   const refreshDevices = useCallback(async () => {
     if (deviceBusyRef.current) return
@@ -196,5 +262,5 @@ export function useRecorder(enabled: boolean) {
     finally { deviceBusyRef.current = false; setDeviceBusy(false) }
   }, [])
 
-  return { status, detail, captureError, final, interim, segments, duration, events, silenceHint, inputLevel, peakLevel, signalWarning, processedSeconds, microphone, devices, deviceId, deviceBusy, refreshDevices, setDeviceId, start, pause, resume, finish, retryTranscription }
+  return { status, detail, captureError, recorderNotice, final, interim, segments, duration, events, silenceHint, inputLevel, peakLevel, signalWarning, processedSeconds, microphone, devices, deviceId, deviceBusy, refreshDevices, setDeviceId, start, pause, resume, finish, retryTranscription, release }
 }

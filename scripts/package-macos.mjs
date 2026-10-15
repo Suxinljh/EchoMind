@@ -1,11 +1,26 @@
 import { build } from 'esbuild'
-import { chmod, copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 if (process.platform !== 'darwin') throw new Error('此脚本只用于 macOS 发布包')
 const version = JSON.parse(await readFile('package.json', 'utf8')).version
 const folder = resolve(`release/EchoMind-${version}-macos-${process.arch}`)
+// 打包前确认 dist 里真的有页面和四个语音模型文件，避免产出「宣称含模型却没有模型」的包。
+// 这个脚本本身不构建，所以缺失时只报错并给出修复命令。
+const required = [
+  { path: 'dist/index.html', minSize: 1 },
+  ...['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt'].map(name => ({
+    path: `dist/models/zipformer-2025/${name}`,
+    minSize: name === 'encoder.onnx' ? 1_000_000 : 1,
+  })),
+]
+for (const item of required) {
+  const info = await stat(item.path).catch(() => null)
+  if (!info?.isFile() || info.size < item.minSize) {
+    throw new Error(`打包中止：dist 中缺少有效文件 ${item.path}。\n请先运行 pnpm build（会自动准备语音模型），确认 dist/index.html 与 dist/models/zipformer-2025/ 下的 encoder.onnx、decoder.onnx、joiner.onnx、tokens.txt 都存在且非空，再重新运行 pnpm package:macos。`)
+  }
+}
 await rm(folder, { recursive: true, force: true })
 await mkdir(folder, { recursive: true })
 await cp('dist', join(folder, 'dist'), { recursive: true })

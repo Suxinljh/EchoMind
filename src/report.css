@@ -60,7 +60,8 @@
 .results-page .checks-grid small,
 .results-page .coverage-row small { font-size: 13px; line-height: 1.6; }
 .results-page .transcript-tag { font-size: 13px; }
-.results-page .transcript-pair { gap: 22px; margin-top: 24px; }
+.results-page .transcript-help { margin: -5px 0 0; color: var(--app-muted); font-size: 13px; line-height: 1.6; }
+.results-page .transcript-pair { gap: 22px; margin-top: 20px; }
 .results-page .transcript-pair>div:first-child {
   position: relative;
   min-height: 260px;
@@ -77,9 +78,39 @@
 }
 .results-page .transcript-pair strong { font-size: 15px; }
 .results-page .transcript-pair p { font-size: 15px; line-height: 1.85; }
-.results-page .transcript-pair small { font-size: 13px; line-height: 1.6; }
-.results-page .transcript-pair .field { font-size: 15px; }
-.results-page .transcript-pair textarea { font-size: 15px; line-height: 1.75; }
+.results-page .semantic-editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 260px;
+  padding: 17px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--radius-box, 8px);
+  background: var(--app-subtle);
+  color: var(--app-ink);
+}
+.results-page .semantic-editor:focus-within { border-color: var(--app-primary); }
+.results-page .semantic-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  margin-top: 22px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--app-ink);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.75;
+  resize: vertical;
+}
+.results-page .semantic-editor textarea:focus-visible { outline: none; }
+.results-page .transcript-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+:root[data-theme="newspaper"] .results-page .transcript-pair>div:first-child,
+:root[data-theme="newspaper"] .results-page .semantic-editor { border-radius: 0; }
+:root[data-theme="neobrutalism"] .results-page .transcript-pair>div:first-child,
+:root[data-theme="neobrutalism"] .results-page .semantic-editor { border: 2px solid var(--app-ink); border-radius: 3px; }
 
 @media (max-width: 900px) {
   .results-page .results-grid { grid-template-columns: 1fr; }

@@ -11,13 +11,13 @@ async function chat(provider: Provider, messages: { role: 'system' | 'user' | 'a
       body: JSON.stringify({ provider, messages, testOnly: !!options.testOnly }), signal: controller.signal,
     })
     const data = await response.json() as { text?: string; usage?: { input?: number; output?: number }; error?: string }
-    if (!response.ok) throw new Error(data.error || `本机模型服务返回 HTTP ${response.status}`)
+    if (!response.ok) throw new Error(data.error || `模型服务返回 HTTP ${response.status}`)
     if (!data.text?.trim()) throw new Error('模型响应缺少文本内容')
     return { text: data.text, usage: data.usage }
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(`本机模型服务在 ${Math.round((timeoutMs + 5000) / 1000)} 秒内未响应，请检查 npm run dev 是否仍在运行。`)
-    if (error instanceof SyntaxError) throw new Error('本机模型服务未返回 JSON。请通过 npm run dev 启动应用并刷新页面。')
-    if (error instanceof TypeError) throw new Error('无法连接本机模型服务。请检查 npm run dev 是否仍在运行。')
+    if (controller.signal.aborted) throw new Error(`模型服务在 ${Math.round((timeoutMs + 5000) / 1000)} 秒内未响应，请稍后重试。`)
+    if (error instanceof SyntaxError) throw new Error('模型服务未返回 JSON，请刷新页面后重试。')
+    if (error instanceof TypeError) throw new Error('无法连接模型服务，请检查网络连接。')
     throw error
   } finally { clearTimeout(timer) }
 }

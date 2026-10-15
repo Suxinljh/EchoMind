@@ -9,6 +9,8 @@
     "package:macos": "node scripts/package-macos.mjs",
     "prebuild": "npm run prepare:model",
     "build": "tsc -b && vite build",
+    "build:cloudflare": "ECHOMIND_CLOUDFLARE_BUILD=1 pnpm build && node scripts/clean-cloudflare-assets.mjs",
+    "deploy:cloudflare": "pnpm build:cloudflare && wrangler deploy",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -37,6 +39,7 @@
     "daisyui": "^5.7.50",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.0",
-    "vite": "^6.1.0"
+    "vite": "^6.1.0",
+    "wrangler": "4.151.0"
   }
 }

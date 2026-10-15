@@ -5,6 +5,7 @@ release/
 *.tsbuildinfo
 *.log
 .vite/
+.wrangler/
 
 # Local credentials and settings
 .env

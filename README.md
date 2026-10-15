@@ -85,11 +85,38 @@ pnpm build
 
 构建包含 TypeScript 检查，产物写入 `dist/`。
 
+## 部署到 Cloudflare Workers
+
+Cloudflare 部署使用 Workers Static Assets 托管前端，Worker 提供 `/api/model` 和语音模型文件。四个 ASR 模型文件保存在现有 R2 桶 `app` 的 `echomind/` 前缀下，不进入 Git，也不包含在 Workers 静态资源中。
+
+先按上文准备本地模型文件，然后在已登录目标 Cloudflare 账号的机器上上传：
+
+```bash
+for name in encoder.onnx decoder.onnx joiner.onnx tokens.txt; do
+  pnpm exec wrangler r2 object put "app/echomind/$name" --remote \
+    --file "public/models/zipformer-2025/$name" \
+    --content-type application/octet-stream
+done
+```
+
+本地验证并部署：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build:cloudflare
+pnpm exec wrangler deploy --dry-run
+pnpm exec wrangler deploy
+```
+
+Cloudflare Workers Builds 连接此 GitHub 仓库时，生产分支选 `main`，构建命令填 `pnpm build:cloudflare`，部署命令填 `pnpm exec wrangler deploy`。模型文件已在 R2，云端构建无需下载模型。首次部署后检查首页、`/changelog`、`/models/zipformer-2025/encoder.onnx` 和模型连接测试。
+
+云端模型服务只接受公开 HTTPS 域名；本机的 `localhost` 模型接口仍可用于本地运行，但 Cloudflare Worker 无法访问用户电脑上的服务。API Key 由浏览器当前标签页提交给本站 Worker，再转发给用户配置的模型服务，不作为构建或运行时密钥保存。
+
 维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。
 
 ## 隐私与数据
 
-音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置和语义稿，才会经本机服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。
+音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置和语义稿，才会经当前站点的服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。
 
 ## 当前边界
 

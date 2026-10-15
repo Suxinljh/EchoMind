@@ -3,6 +3,10 @@ import { join } from 'node:path'
 
 const source = 'benchmarks/private/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30'
 const target = 'public/models/zipformer-2025'
+if (process.env.ECHOMIND_CLOUDFLARE_BUILD === '1') {
+  console.log('Cloudflare 构建从 R2 加载 ASR 模型，跳过本地模型准备')
+  process.exit(0)
+}
 const names = [
   ['encoder.int8.onnx', 'encoder.onnx'],
   ['decoder.onnx', 'decoder.onnx'],

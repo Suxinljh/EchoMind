@@ -46,7 +46,7 @@ export async function handleModelRequest(req: IncomingMessage, res: ServerRespon
     const result = await generateText({
       model, instructions: request.messages.filter(message => message.role === 'system').map(message => message.content).join('\n'),
       messages: request.messages.filter(message => message.role !== 'system'), temperature: 0.2, maxRetries: 0, abortSignal: controller.signal,
-      ...(request.testOnly ? { maxOutputTokens: 16 } : {}),
+      ...(request.testOnly ? { maxOutputTokens: 16 } : request.maxTokens ? { maxOutputTokens: request.maxTokens } : {}),
       ...(isDeepSeek ? { providerOptions: { deepseek: { thinking: { type: 'disabled' } } } } : {}),
     })
     if (!result.text.trim()) throw new Error('模型响应缺少文本内容')

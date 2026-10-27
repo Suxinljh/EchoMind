@@ -601,3 +601,145 @@
   margin-top: 12px;
   text-decoration: none;
 }
+
+
+/* ---------- 积分与用量 ---------- */
+
+.credits-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-primary-soft);
+  color: var(--app-primary-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.credits-chip:hover {
+  border-color: var(--app-primary);
+}
+
+.credits-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.credits-summary > div {
+  padding: 14px 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: var(--app-subtle);
+}
+
+.credits-summary strong {
+  display: block;
+  font-size: 22px;
+  color: var(--app-ink);
+}
+
+.credits-summary span {
+  font-size: 11px;
+  color: var(--app-muted);
+}
+
+.credits-empty {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px dashed var(--app-line);
+  border-radius: 12px;
+  color: var(--app-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.usage-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.usage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface);
+}
+
+.usage-main {
+  min-width: 0;
+}
+
+.usage-main strong {
+  display: block;
+  font-size: 12px;
+  color: var(--app-ink);
+}
+
+.usage-main small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--app-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: none;
+  font-size: 11px;
+  color: var(--app-muted);
+}
+
+.usage-meta strong {
+  color: var(--app-primary-ink);
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.package-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface);
+  text-align: left;
+}
+
+.package-card:hover {
+  border-color: var(--app-primary);
+  background: var(--app-primary-soft);
+}
+
+.package-card strong {
+  font-size: 13px;
+  color: var(--app-ink);
+}
+
+.package-card span {
+  font-size: 12px;
+  color: var(--app-primary-ink);
+  font-weight: 700;
+}

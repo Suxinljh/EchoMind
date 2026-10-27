@@ -1,7 +1,7 @@
 import type { Provider } from './types'
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
-export type ModelRequest = { provider: Provider; messages: ChatMessage[]; testOnly?: boolean }
+export type ModelRequest = { provider: Provider; messages: ChatMessage[]; testOnly?: boolean; maxTokens?: number }
 
 export const MAX_REQUEST_BYTES = 1_000_000
 export const TIMEOUT_MS = { test: 20_000, normal: 90_000 }
@@ -48,6 +48,9 @@ export function validateModelRequest(value: unknown, policy: RequestPolicy): Mod
     provider: { baseUrl: provider.baseUrl, apiKey: provider.apiKey, model: provider.model },
     messages: messages as ChatMessage[],
     ...(value.testOnly === true ? { testOnly: true } : {}),
+    ...(typeof value.maxTokens === 'number' && Number.isInteger(value.maxTokens) && value.maxTokens >= 1
+      ? { maxTokens: Math.min(value.maxTokens, 2000) }
+      : {}),
   }
 }
 

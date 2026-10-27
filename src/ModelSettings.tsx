@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import type { AccountUser } from './account'
+import type { ModelMode } from './modelMode'
 import type { Provider } from './types'
 
-export type ModelMode = 'own' | 'platform'
+const PACKAGES = [
+  { id: 'basic', label: '100 积分', price: '¥1' },
+  { id: 'standard', label: '1000 积分', price: '¥10' },
+  { id: 'pro', label: '5000 积分', price: '¥50' },
+]
 
 type Props = {
   mode: ModelMode
@@ -32,26 +37,31 @@ export default function ModelSettings({
 }: Props) {
   const [providerState, setProviderState] = useState('')
   const [balance, setBalance] = useState<number | null>(null)
+  const [configured, setConfigured] = useState(false)
   const [payState, setPayState] = useState('')
   const own = mode === 'own'
 
   useEffect(() => {
     if (!account) return
     const controller = new AbortController()
-    fetch('/api/pay/balance', { signal: controller.signal })
-      .then(response => (response.ok ? response.json() as Promise<{ balance?: number }> : null))
-      .then(data => { if (data && typeof data.balance === 'number') setBalance(data.balance) })
+    fetch('/api/credits', { signal: controller.signal })
+      .then(response => (response.ok ? response.json() as Promise<{ balance?: number; configured?: boolean }> : null))
+      .then(data => {
+        if (!data) return
+        if (typeof data.balance === 'number') setBalance(data.balance)
+        setConfigured(Boolean(data.configured))
+      })
       .catch(() => {})
     return () => controller.abort()
   }, [account])
 
-  async function topUp() {
+  async function topUp(packageId: string) {
     setPayState('正在创建订单…')
     try {
       const response = await fetch('/api/pay/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ packageId: 'test' }),
+        body: JSON.stringify({ packageId }),
       })
       const data = await response.json() as { formHtml?: string; error?: string }
       if (!response.ok || !data.formHtml) throw new Error(data.error || '创建订单失败')
@@ -119,7 +129,7 @@ export default function ModelSettings({
                 setBusy(true)
                 setProviderState('正在测试，最多等待 20 秒…')
                 try {
-                  await (await import('./ai')).testProvider(provider)
+                  await (await import('./ai')).testProvider(provider, mode)
                   setProviderState('连接成功')
                 } catch (error) {
                   setProviderState(error instanceof Error ? error.message : String(error))
@@ -138,14 +148,14 @@ export default function ModelSettings({
           <div className="platform-model-panel">
             <div className="platform-model-head">
               <strong>平台模型</strong>
-              <span className="platform-badge">内测中</span>
+              <span className="platform-badge">{configured ? "按量计费" : "未配置"}</span>
             </div>
             {account ? (
               <>
                 <div className="platform-model-row"><span>账号</span><strong>{account.name || account.email}</strong></div>
                 <div className="platform-model-row"><span>积分</span><strong>{balance === null ? '—' : balance}</strong></div>
-                <p className="platform-model-note">平台模型仍在准备中。可以先充值积分，上线后按实际用量扣减；下面是一笔 ¥0.01 的真实支付，用于验证收款链路。</p>
-                <button className="secondary-button" onClick={topUp}>充值 ¥0.01 · 100 积分（体验包）</button>
+                <p className="platform-model-note">{configured ? '按供应商 token 成本的 2 倍扣积分，1 积分 = ¥0.01。每次调用都有输出上限，避免异常消耗。' : '平台模型尚未配置供应商 API Key，暂时无法调用；可以先充值，配置完成后即可使用。'}</p>
+                <div className="package-grid">{PACKAGES.map(pkg => <button key={pkg.id} type="button" className="package-card" onClick={() => topUp(pkg.id)}><strong>{pkg.label}</strong><span>{pkg.price}</span></button>)}</div>
                 {payState && <p className="platform-model-note">{payState}</p>}
               </>
             ) : (

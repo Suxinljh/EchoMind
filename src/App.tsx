@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Coins, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, UserRound, X } from 'lucide-react'
 import { fetchAccount, takeAuthNotice, type AccountUser } from './account'
 import { localEvaluation, offlineTasks, overallScore, questionScore, reportStats, speechStats, tentativeFillers, transcriptParagraphs } from './logic'
 import { captureReportAppearance, createReportHtml } from './reportExport'
 import DeviceSettings from './DeviceSettings'
-import ModelSettings, { type ModelMode } from './ModelSettings'
+import ModelSettings from './ModelSettings'
+import { CREDITS_CHANGED, KIND_LABELS, fetchCredits, fetchUsage, type UsageLog } from './credits'
+import type { ModelMode } from './modelMode'
 import Logo from './Logo'
 import SemanticEditor from './SemanticEditor'
 import packageJson from '../package.json'
@@ -76,6 +78,11 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [account, setAccount] = useState<AccountUser | null>(null)
   const [accountReady, setAccountReady] = useState(false)
+  const [credits, setCredits] = useState<number | null>(null)
+  const [platformConfigured, setPlatformConfigured] = useState(false)
+  const [creditsOpen, setCreditsOpen] = useState(false)
+  const [usageLogs, setUsageLogs] = useState<UsageLog[]>([])
+  const [usageLoading, setUsageLoading] = useState(false)
   const [selectedResult, setSelectedResult] = useState(0)
   const historyTimer = useRef<number | null>(null)
   const historyRef = useRef(history)
@@ -89,8 +96,8 @@ export default function App() {
   sessionRef.current = session
   const recorder = useRecorder(stage === 'practice')
   const task = session?.tasks[session.current]
-  // 平台模型与积分仍在准备中；在网关上线前，平台模式只展示说明、不发起 AI 请求。
-  const readyForAI = modelMode === 'own' && !!provider.baseUrl && !!provider.model && privacyConsent
+  const platformReady = modelMode === 'platform' && accountReady && !!account && platformConfigured && (credits ?? 0) > 0
+  const readyForAI = modelMode === 'own' ? !!provider.baseUrl && !!provider.model && privacyConsent : platformReady
   const results = useMemo(() => session?.tasks.map(t => ({ task: t, answer: session.answers.find(a => a.taskId === t.id) })) || [], [session])
   const summaryStats = useMemo(() => session ? reportStats(session) : null, [session])
   const totalScore = session ? overallScore(session) : null
@@ -106,6 +113,28 @@ export default function App() {
     void fetchAccount(controller.signal).then(state => { setAccount(state.user); setAccountReady(state.available) })
     return () => controller.abort()
   }, [])
+  useEffect(() => {
+    if (!account) { setCredits(null); setPlatformConfigured(false); return }
+    const controller = new AbortController()
+    const apply = (info: { balance: number; configured: boolean } | null) => {
+      if (!info) return
+      setCredits(info.balance)
+      setPlatformConfigured(info.configured)
+    }
+    void fetchCredits(controller.signal).then(apply)
+    const refresh = () => { void fetchCredits().then(apply) }
+    window.addEventListener(CREDITS_CHANGED, refresh)
+    return () => { controller.abort(); window.removeEventListener(CREDITS_CHANGED, refresh) }
+  }, [account])
+
+  async function openCredits() {
+    setCreditsOpen(true)
+    setUsageLoading(true)
+    const data = await fetchUsage()
+    if (data) { setCredits(data.balance); setUsageLogs(data.logs) }
+    setUsageLoading(false)
+  }
+
   // 登录回跳提示放在 effect 里读取，避免在渲染期间改地址栏。
   useEffect(() => { const text = takeAuthNotice(); if (text) setNotice(text) }, [])
   // 支付回跳结果；最终状态仍以服务端异步通知/查询为准。
@@ -113,6 +142,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search)
     const pay = params.get('pay')
     if (!pay) return
+    if (pay === 'success') window.dispatchEvent(new Event(CREDITS_CHANGED))
     setNotice(pay === 'success' ? '支付成功，积分已到账。' : pay === 'pending' ? '支付结果确认中，请稍后查看积分。' : '支付结果校验失败，未入账。')
     params.delete('pay')
     const query = params.toString()
@@ -150,7 +180,7 @@ export default function App() {
     setBusy(true)
     let tasks: Task[]
     if (mode === 'interview' && readyForAI) {
-      try { tasks = await (await import('./ai')).planInterview(provider, interview) }
+      try { tasks = await (await import('./ai')).planInterview(provider, interview, modelMode) }
       catch (error) { tasks = offlineTasks(mode, interview); setNotice(`AI 出题失败，已使用基础问题：${error instanceof Error ? error.message : String(error)}`) }
     } else tasks = offlineTasks(mode, mode === 'interview' ? interview : report)
     setSession({ mode, tasks, answers: [], current: 0, settings: mode === 'interview' ? { ...interview } : { ...report }, createdAt: new Date().toISOString() })
@@ -214,7 +244,7 @@ export default function App() {
     const controller = new AbortController()
     reportAbortRef.current = controller
     try {
-      const evaluation = await (await import('./ai')).evaluate(provider, item, answer, target.settings, controller.signal)
+      const evaluation = await (await import('./ai')).evaluate(provider, item, answer, target.settings, controller.signal, modelMode)
       if (evaluationTargetChanged(target, answer)) return
       setSession(current => current?.createdAt === target.createdAt ? { ...current, overallAnalysis: undefined, answers: current.answers.map(a => a.taskId === answer.taskId && a.semantic === answer.semantic ? { ...a, evaluation } : a) } : current)
     } catch (error) {
@@ -263,7 +293,7 @@ export default function App() {
         if (!item) continue
         setNotice(`正在评估 ${index + 1}/${targets.length}…`)
         try {
-          const evaluation = await (await import('./ai')).evaluate(provider, item, answer, session.settings, controller.signal)
+          const evaluation = await (await import('./ai')).evaluate(provider, item, answer, session.settings, controller.signal, modelMode)
           const position = updatedAnswers.findIndex(saved => saved.taskId === answer.taskId)
           if (position >= 0) updatedAnswers[position] = { ...answer, evaluation }
           writeAnswer(answer, evaluation)
@@ -273,7 +303,7 @@ export default function App() {
       if (!failures && updatedAnswers.some(answer => answer.status === 'answered')) {
         setNotice('正在生成整场分析…')
         try {
-          const overallAnalysis = await (await import('./ai')).analyzeSession(provider, { ...session, answers: updatedAnswers }, controller.signal)
+          const overallAnalysis = await (await import('./ai')).analyzeSession(provider, { ...session, answers: updatedAnswers }, controller.signal, modelMode)
           if (sessionRef.current?.createdAt === session.createdAt) setSession(current => current?.createdAt === session.createdAt ? { ...current, overallAnalysis } : current)
           else setNotice('原练习已切换，整场分析未写回。')
         } catch (error) { failures++; firstError = error instanceof Error ? error.message : String(error) }
@@ -305,7 +335,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand-group"><button className="brand" onClick={() => { if (stage === 'setup') setMode('interview') }} aria-label="EchoMind 首页"><Logo/></button><a className="beta-badge" href="/changelog" aria-label="查看更新日志">v{packageJson.version} Beta</a></div>
-      <div className="top-right">{accountReady ? (account ? <span className="account-chip" title={account.email || account.name}><span className="account-avatar" aria-hidden="true">{(account.name || account.email || 'S').slice(0, 1).toUpperCase()}</span><span className="account-name">{account.name || account.email}</span><a className="account-action" href="/auth/logout">退出</a></span> : <a className="account-login" href="/auth/login?returnTo=/"><UserRound size={15}/> 登录</a>) : null}<span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
+      <div className="top-right">{account && credits !== null ? <button type="button" className="credits-chip" onClick={openCredits}><Coins size={14}/> {credits} 积分</button> : null}{accountReady ? (account ? <span className="account-chip" title={account.email || account.name}><span className="account-avatar" aria-hidden="true">{(account.name || account.email || 'S').slice(0, 1).toUpperCase()}</span><span className="account-name">{account.name || account.email}</span><a className="account-action" href="/auth/logout">退出</a></span> : <a className="account-login" href="/auth/login?returnTo=/"><UserRound size={15}/> 登录</a>) : null}<span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
     </header>
     <div className="layout">
       <aside className="sidebar">
@@ -335,7 +365,7 @@ export default function App() {
               <label className="field full">计划要点 <span className="hint">可选</span><textarea rows={4} value={report.outline} onChange={e => setReport({ ...report, outline: e.target.value })} placeholder="写下你准备覆盖的关键点；报告会据此检查覆盖情况"/></label>
             </div>}
           </section>
-          <section className="setup-model-row"><div className="model-notice"><Sparkles size={17}/><div><strong>{readyForAI ? '已填写模型配置' : modelMode === 'platform' ? '平台模型内测中' : '可先用基础问题练习'}</strong><span>{readyForAI ? '开始后会调用你设置的模型生成问题并评估文字。' : modelMode === 'platform' ? '平台模型与积分即将上线，当前先使用基础问题。' : '连接自备模型后，可获得针对 JD 的问题和证据化反馈。'}</span></div></div><button className="secondary-button" onClick={() => setSettingsOpen(true)}>模型设置 <ArrowRight size={14}/></button></section>
+          <section className="setup-model-row"><div className="model-notice"><Sparkles size={17}/><div><strong>{readyForAI ? '已填写模型配置' : modelMode === 'platform' ? (!platformConfigured ? '平台模型未配置' : (credits ?? 0) <= 0 ? '积分不足' : '平台模型未就绪') : '可先用基础问题练习'}</strong><span>{readyForAI ? (modelMode === 'platform' ? '开始后会按 token 扣减积分生成问题并评估文字。' : '开始后会调用你设置的模型生成问题并评估文字。') : modelMode === 'platform' ? (!platformConfigured ? '管理员配置平台模型后即可使用；当前先使用基础问题。' : (credits ?? 0) <= 0 ? '请先在设置中充值积分；当前先使用基础问题。' : '登录后可查看积分并使用平台模型。') : '连接自备模型后，可获得针对 JD 的问题和证据化反馈。'}</span></div></div><button className="secondary-button" onClick={() => setSettingsOpen(true)}>模型设置 <ArrowRight size={14}/></button></section>
         </div>}
         {stage === 'practice' && session && task && <div className="practice-page">
           <div className="page-topline"><button className="text-button" onClick={() => setModePickerOpen(true)}><ArrowLeft size={16}/> 新练习</button><span>环节 {session.current + 1} / {session.tasks.length}</span></div>
@@ -404,5 +434,12 @@ export default function App() {
         account={account}
         onDone={() => setSettingsOpen(false)}
       /> : settingsTab === 'device' ? <><DeviceSettings/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></> : <><ThemeSettings selected={theme} onSelect={setTheme}/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></>}</div></div>}
+    {creditsOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCreditsOpen(false) }}><div className="settings-modal credits-modal" role="dialog" aria-modal="true" aria-label="积分与用量">
+      <div className="modal-head"><div><h2>积分与用量</h2></div><button className="icon-button" aria-label="关闭" onClick={() => setCreditsOpen(false)}><X size={20}/></button></div>
+      <div className="credits-summary"><div><strong>{credits ?? '—'}</strong><span>当前积分</span></div><div><strong>{usageLogs.reduce((sum, log) => sum + log.credits, 0)}</strong><span>最近消耗</span></div></div>
+      {!platformConfigured && <p className="credits-empty">平台模型尚未配置，暂时无法产生消耗记录。</p>}
+      {usageLoading ? <div className="credits-empty">正在读取用量…</div> : usageLogs.length === 0 ? <p className="credits-empty">还没有平台模型调用记录。</p> : <div className="usage-list">{usageLogs.map(log => <div key={log.id} className="usage-row"><div className="usage-main"><strong>{KIND_LABELS[log.kind] || log.kind}</strong><small>{new Date(log.createdAt).toLocaleString('zh-CN')} · {log.model}</small></div><div className="usage-meta"><span>{log.inputTokens.toLocaleString()} + {log.outputTokens.toLocaleString()} tokens</span><strong>-{log.credits} 积分</strong></div></div>)}</div>}
+      <div className="modal-actions"><button className="secondary-button" onClick={openCredits}>刷新</button><button className="primary-button" onClick={() => setCreditsOpen(false)}>完成</button></div>
+    </div></div>}
   </div>
 }

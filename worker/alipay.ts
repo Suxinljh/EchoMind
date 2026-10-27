@@ -18,9 +18,11 @@ export type PayEnv = {
 
 export type CreditPackage = { id: string; label: string; amountCents: number; credits: number }
 
-/** 目前只开放 1 分钱的沙箱体验包，避免误收真实款项。 */
+/** 1 积分 = ¥0.01，与平台模型的成本倍率计费保持一致。 */
 export const PACKAGES: Record<string, CreditPackage> = {
-  test: { id: 'test', label: '体验包 · 100 积分', amountCents: 1, credits: 100 },
+  basic: { id: 'basic', label: '100 积分', amountCents: 100, credits: 100 },
+  standard: { id: 'standard', label: '1000 积分', amountCents: 1000, credits: 1000 },
+  pro: { id: 'pro', label: '5000 积分', amountCents: 5000, credits: 5000 },
 }
 
 const SANDBOX_GATEWAY = 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'

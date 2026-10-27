@@ -1,6 +1,7 @@
 import { CLOUD_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
 import type { ModelRequest } from '../src/modelProtocol'
 import { handleCallback, handleLogin, handleLogout, handleMe, readAccount } from './auth'
+import { handleCredits, handlePlatformModel, type PlatformEnv } from './platform'
 import {
   PACKAGES,
   buildPagePayForm,
@@ -63,7 +64,7 @@ async function handleModel(request: Request): Promise<Response> {
         model: input.provider.model.trim(),
         messages: input.messages,
         temperature: 0.2,
-        ...(input.testOnly ? { max_tokens: 16 } : {}),
+        ...(input.testOnly ? { max_tokens: 16 } : input.maxTokens ? { max_tokens: input.maxTokens } : {}),
         ...(isDeepSeek ? { thinking: { type: 'disabled' } } : {}),
       }),
       signal: controller.signal,
@@ -112,7 +113,7 @@ async function handlePay(request: Request, env: Env): Promise<Response> {
     const account = await readAccount(request, env)
     if (!account) return json(401, { error: '请先登录' })
     const body = await request.json().catch(() => ({})) as { packageId?: string }
-    const pkg = PACKAGES[body.packageId || 'test']
+    const pkg = PACKAGES[body.packageId || 'basic']
     if (!pkg) return json(400, { error: '未知的充值套餐' })
     const outTradeNo = await createOrder(payEnv, account.sub, pkg)
     const formHtml = await buildPagePayForm(payEnv, request, {
@@ -194,6 +195,8 @@ export default {
     if (pathname === '/auth/callback') return handleCallback(request, env)
     if (pathname === '/auth/logout') return handleLogout(request, env)
     if (pathname === '/api/me') return handleMe(request, env)
+    if (pathname === '/api/platform-model') return handlePlatformModel(request, env as Env & PlatformEnv)
+    if (pathname === '/api/credits' || pathname === '/api/credits/usage') return handleCredits(request, env as Env & PlatformEnv)
     if (pathname.startsWith('/api/pay/')) return handlePay(request, env)
     if (pathname === '/api/model') return handleModel(request)
     if (pathname.startsWith(modelPrefix)) return handleModelFile(request, env, pathname.slice(modelPrefix.length))

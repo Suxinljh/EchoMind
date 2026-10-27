@@ -61,7 +61,7 @@ export default function ChangelogPage() {
         <a className="changelog-home-link" href="/"><ArrowLeft size={17}/> 返回练习</a>
         <div className="sidebar-meta">
           <a className="sidebar-link" href={github} target="_blank" rel="noopener noreferrer"><GitBranch size={17}/> GitHub <ExternalLink size={14}/></a>
-          <div className="sidebar-bottom"><ShieldCheck size={18}/><div><strong>隐私优先</strong><p>音频在浏览器内处理。练习文字保存在本机浏览器；启用模型后才会发送指定文字。</p></div></div>
+          <div className="sidebar-bottom"><div className="sidebar-bottom-head"><ShieldCheck size={20}/><strong>隐私优先</strong></div><p>音频在浏览器内处理。练习文字保存在本机浏览器；启用模型后才会发送指定文字。</p></div>
         </div>
       </aside>
       <main className="main-area changelog-main">

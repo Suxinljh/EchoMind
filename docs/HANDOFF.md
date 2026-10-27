@@ -92,6 +92,17 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 
 核对方式：未登录打开首页 → 右上角“登录” → 统一登录页登录/授权 → 回到 `/?auth_ok=1` 且显示昵称 → `curl https://echomind.ljhsu.xin/api/me` 返回 sub/name/email → 退出后 Cookie 清除、`/api/me` 返回 `{"user":null}`。
 
+## 练习历史与账号隔离
+
+练习历史仍保存在浏览器 localStorage，但已按账号隔离：
+
+- 未登录：`echomind-history-v2:anonymous`
+- 已登录：`echomind-history-v2:user:<sub>`
+- 旧数据 `echomind-practice-history-v1` 会一次性复制到匿名存储，旧键保留作回退
+- 首次登录且存在匿名练习时，会询问是否导入当前账号；导入后清除匿名副本，并记录 `echomind-history-v2:migrated:<sub>`，之后不再重复询问
+- 退出登录后会回到匿名历史；导入过的账号数据不会出现在匿名里
+- 目前仍**没有跨设备同步**，D1 只存积分与订单，没有练习表；换设备/浏览器看不到历史
+
 ## 积分与支付（沙箱）
 
 支付走支付宝 AI 网页应用收款，代码在 `worker/alipay.ts`，路由在 `worker/index.ts`：

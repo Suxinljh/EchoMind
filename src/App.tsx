@@ -23,7 +23,22 @@ const initialInterview: InterviewSettings = { position: '', jd: '', questionCoun
 const initialReport: ReportSettings = { topic: '', audience: '', purpose: '同步进展', secondaryPurpose: '', outline: '' }
 const initialProvider: Provider = { baseUrl: '', apiKey: '', model: '' }
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
-const historyKey = 'echomind-practice-history-v1'
+const LEGACY_HISTORY_KEY = 'echomind-practice-history-v1'
+const ANONYMOUS_HISTORY_KEY = 'echomind-history-v2:anonymous'
+const LEGACY_MOVED_KEY = 'echomind-history-v2:legacy-moved'
+const historyKeyFor = (sub?: string) => sub ? `echomind-history-v2:user:${sub}` : ANONYMOUS_HISTORY_KEY
+const migrationFlagKey = (sub: string) => `echomind-history-v2:migrated:${sub}`
+function writeHistory(key: string, value: Session[]) { localStorage.setItem(key, JSON.stringify(value)) }
+function ensureLegacyHistory() {
+  try {
+    if (localStorage.getItem(LEGACY_MOVED_KEY)) return
+    if (localStorage.getItem(ANONYMOUS_HISTORY_KEY) === null) {
+      const legacy = localStorage.getItem(LEGACY_HISTORY_KEY)
+      if (legacy) localStorage.setItem(ANONYMOUS_HISTORY_KEY, legacy)
+    }
+    localStorage.setItem(LEGACY_MOVED_KEY, '1')
+  } catch { /* 迁移失败时保持原状，不阻塞应用启动。 */ }
+}
 const providerKey = 'echomind-model-config-v1'
 const HISTORY_WRITE_DELAY_MS = 500
 function newestFirst(items: Session[]): Session[] { return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)) }
@@ -48,9 +63,9 @@ function sanitizeSession(value: unknown): Session | null {
   const raw = typeof value.current === 'number' && Number.isFinite(value.current) ? Math.floor(value.current) : 0
   return { ...(value as unknown as Session), current: Math.min(Math.max(0, raw), tasks.length) }
 }
-function readHistory(): Session[] {
+function readHistory(key: string): Session[] {
   try {
-    const value = JSON.parse(localStorage.getItem(historyKey) || '[]')
+    const value = JSON.parse(localStorage.getItem(key) || '[]')
     if (!Array.isArray(value)) return []
     return newestFirst(value.map(sanitizeSession).filter((item): item is Session => item !== null))
   } catch { return [] }
@@ -66,7 +81,9 @@ export default function App() {
   const [report, setReport] = useState(initialReport)
   const [provider, setProvider] = useState(readProvider)
   const [modelMode, setModelMode] = useState<ModelMode>(readModelMode)
-  const [history, setHistory] = useState<Session[]>(readHistory)
+  const [historyKey, setHistoryKey] = useState(ANONYMOUS_HISTORY_KEY)
+  const [history, setHistory] = useState<Session[]>(() => { ensureLegacyHistory(); return readHistory(ANONYMOUS_HISTORY_KEY) })
+  const [migration, setMigration] = useState<Session[] | null>(null)
   const [modePickerOpen, setModePickerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<'model' | 'device' | 'theme'>('model')
@@ -86,6 +103,7 @@ export default function App() {
   const [selectedResult, setSelectedResult] = useState(0)
   const historyTimer = useRef<number | null>(null)
   const historyRef = useRef(history)
+  const historyKeyRef = useRef(historyKey)
   const historyFailed = useRef(false)
   // 标识当前练习；录音收尾是异步的，切换练习后不能再把旧结果写进新练习。
   const practiceToken = useRef(0)
@@ -93,6 +111,7 @@ export default function App() {
   const reportAbortRef = useRef<AbortController | null>(null)
   const sessionRef = useRef(session)
   historyRef.current = history
+  historyKeyRef.current = historyKey
   sessionRef.current = session
   const recorder = useRecorder(stage === 'practice')
   const task = session?.tasks[session.current]
@@ -148,6 +167,47 @@ export default function App() {
     const query = params.toString()
     window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
   }, [])
+  // 练习历史按账号隔离：登录后切到该 sub 的存储，退出后回到匿名存储。
+  useEffect(() => {
+    if (!accountReady) return
+    const nextKey = historyKeyFor(account?.sub)
+    setHistoryKey(nextKey)
+    setHistory(readHistory(nextKey))
+    if (account) {
+      const anonymous = readHistory(ANONYMOUS_HISTORY_KEY)
+      if (anonymous.length && !localStorage.getItem(migrationFlagKey(account.sub))) setMigration(anonymous)
+      else setMigration(null)
+    } else {
+      setMigration(null)
+    }
+  }, [accountReady, account?.sub])
+
+  function importAnonymousHistory() {
+    if (!account || !migration) return
+    const key = historyKeyFor(account.sub)
+    const existing = readHistory(key)
+    const merged = newestFirst([
+      ...migration,
+      ...existing.filter(item => !migration.some(anonymous => anonymous.createdAt === item.createdAt)),
+    ])
+    try {
+      writeHistory(key, merged)
+    } catch {
+      setNotice('浏览器存储空间不足，导入失败。')
+      return
+    }
+    localStorage.removeItem(ANONYMOUS_HISTORY_KEY)
+    localStorage.setItem(migrationFlagKey(account.sub), '1')
+    if (historyKey === key) setHistory(merged)
+    setMigration(null)
+    setNotice(`已导入 ${migration.length} 条本机练习。`)
+  }
+
+  function skipAnonymousHistory() {
+    if (account) localStorage.setItem(migrationFlagKey(account.sub), '1')
+    setMigration(null)
+  }
+
   useEffect(() => { sessionStorage.setItem('echomind-model-consent', privacyConsent ? 'yes' : 'no') }, [privacyConsent])
   useEffect(() => { try { localStorage.setItem(modelModeKey, modelMode) } catch { /* 仅影响本机记忆，不影响当前使用。 */ } }, [modelMode])
   useEffect(() => { document.documentElement.dataset.theme = theme; saveTheme(theme) }, [theme])
@@ -164,11 +224,11 @@ export default function App() {
       } catch { historyFailed.current = true; setNotice('浏览器存储空间不足，练习历史未保存。') }
     }, HISTORY_WRITE_DELAY_MS)
     return () => { if (historyTimer.current !== null) { window.clearTimeout(historyTimer.current); historyTimer.current = null } }
-  }, [history])
+  }, [history, historyKey])
   useEffect(() => () => {
     if (historyTimer.current === null) return
     window.clearTimeout(historyTimer.current); historyTimer.current = null
-    try { localStorage.setItem(historyKey, JSON.stringify(historyRef.current)) } catch { /* 忽略：卸载时的兜底写入失败不影响后续使用。 */ }
+    try { localStorage.setItem(historyKeyRef.current, JSON.stringify(historyRef.current)) } catch { /* 忽略：卸载时的兜底写入失败不影响后续使用。 */ }
   }, [])
   // 练习变化或组件卸载时中止在途的模型调用，既避免旧结果写回新练习，也避免继续计费。
   useEffect(() => () => { cancelReportEvaluation() }, [session?.createdAt])
@@ -440,6 +500,11 @@ export default function App() {
       {!platformConfigured && <p className="credits-empty">平台模型尚未配置，暂时无法产生消耗记录。</p>}
       {usageLoading ? <div className="credits-empty">正在读取用量…</div> : usageLogs.length === 0 ? <p className="credits-empty">还没有平台模型调用记录。</p> : <div className="usage-list">{usageLogs.map(log => <div key={log.id} className="usage-row"><div className="usage-main"><strong>{KIND_LABELS[log.kind] || log.kind}</strong><small>{new Date(log.createdAt).toLocaleString('zh-CN')} · {log.model}</small></div><div className="usage-meta"><span>{log.inputTokens.toLocaleString()} + {log.outputTokens.toLocaleString()} tokens</span><strong>-{log.credits} 积分</strong></div></div>)}</div>}
       <div className="modal-actions"><button className="secondary-button" onClick={openCredits}>刷新</button><button className="primary-button" onClick={() => setCreditsOpen(false)}>完成</button></div>
+    </div></div>}
+    {migration && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) skipAnonymousHistory() }}><div className="settings-modal migration-modal" role="dialog" aria-modal="true" aria-label="导入本机练习">
+      <div className="modal-head"><div><h2>导入本机练习？</h2></div></div>
+      <p className="settings-intro">这台浏览器里有 {migration.length} 条未登录时保存的练习。导入后只属于当前账号，并从匿名历史中移除；以后换账号或退出登录都不会再看到。</p>
+      <div className="modal-actions"><button className="secondary-button" onClick={skipAnonymousHistory}>暂不导入</button><button className="primary-button" onClick={importAnonymousHistory}>导入到当前账号</button></div>
     </div></div>}
   </div>
 }

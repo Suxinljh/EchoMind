@@ -14,12 +14,12 @@ export type PlatformEnv = Env & {
   PLATFORM_MODEL_ID?: string
   PLATFORM_INPUT_COST_PER_M?: string
   PLATFORM_OUTPUT_COST_PER_M?: string
+  PLATFORM_MARKUP?: string
 }
 
 export type UsageKind = 'plan' | 'evaluate' | 'overall' | 'test'
 
 const CREDIT_CNY = 0.01
-const MARKUP = 2
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'
 const DEFAULT_MODEL = 'deepseek-chat'
 const DEFAULT_INPUT_COST = 2
@@ -110,7 +110,8 @@ export async function handlePlatformModel(request: Request, env: PlatformEnv): P
   const inputCost = (inputTokens / 1_000_000) * numberEnv(env.PLATFORM_INPUT_COST_PER_M, DEFAULT_INPUT_COST)
   const outputCost = (outputTokens / 1_000_000) * numberEnv(env.PLATFORM_OUTPUT_COST_PER_M, DEFAULT_OUTPUT_COST)
   const costCny = inputCost + outputCost
-  const credits = Math.max(1, Math.ceil((costCny * MARKUP) / CREDIT_CNY))
+  const markup = numberEnv(env.PLATFORM_MARKUP, 2)
+  const credits = Math.max(1, Math.ceil((costCny * markup) / CREDIT_CNY))
 
   const usageId = crypto.randomUUID()
   const now = Date.now()

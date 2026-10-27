@@ -112,7 +112,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 
 平台模型网关在 `worker/platform.ts`，路由 `/api/platform-model`；积分查询 `/api/credits`，用量日志 `/api/credits/usage`。
 
-- 计费按 token：`成本 = 输入token/1M × 输入单价 + 输出token/1M × 输出单价`，扣费为成本的 **2 倍**；1 积分 = ¥0.01。
+- 计费按 token：`成本 = 输入token/1M × 输入单价 + 输出token/1M × 输出单价`，扣费为成本的 **`PLATFORM_MARKUP` 倍**（当前 5 倍，工具提示按一次 5 题约 30～50 积分展示）；1 积分 = ¥0.01。
 - 单价由 vars 配置：`PLATFORM_INPUT_COST_PER_M`（默认 2）、`PLATFORM_OUTPUT_COST_PER_M`（默认 8），单位是元/百万 token；供应商 Key 用 secret `PLATFORM_API_KEY`，模型用 `PLATFORM_MODEL_BASE_URL` / `PLATFORM_MODEL_ID`。
 - 输出上限：出题 1200、逐题评价 1400、整场分析 900、连接测试 16。自有模型路径也会带上对应的 `max_tokens`。
 - 每次平台调用写入 `model_usage` 表，并在 `credit_ledger` 记一笔负数；余额在顶部「积分」按钮中查看，点击可看最近 20 条真实 token 用量。

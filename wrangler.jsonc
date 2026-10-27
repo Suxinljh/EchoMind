@@ -19,7 +19,8 @@
     "PLATFORM_MODEL_BASE_URL": "https://api.deepseek.com/v1",
     "PLATFORM_MODEL_ID": "deepseek-chat",
     "PLATFORM_INPUT_COST_PER_M": "2",
-    "PLATFORM_OUTPUT_COST_PER_M": "8"
+    "PLATFORM_OUTPUT_COST_PER_M": "8",
+    "PLATFORM_MARKUP": "5"
   },
   "cache": {
     "enabled": true

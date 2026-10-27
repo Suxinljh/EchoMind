@@ -743,3 +743,38 @@
   color: var(--app-primary-ink);
   font-weight: 700;
 }
+
+
+.tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-ink);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.tooltip:hover::after,
+.tooltip:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}

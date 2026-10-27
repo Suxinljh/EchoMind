@@ -148,7 +148,7 @@ export default function ModelSettings({
           <div className="platform-model-panel">
             <div className="platform-model-head">
               <strong>平台模型</strong>
-              <span className="platform-badge">{configured ? "按量计费" : "未配置"}</span>
+              <span className="platform-badge tooltip" data-tip="一次 5 题模拟面试约 30～50 积分" tabIndex={0}>{configured ? "按量计费" : "未配置"}</span>
             </div>
             {account ? (
               <>
@@ -156,6 +156,7 @@ export default function ModelSettings({
                 <div className="platform-model-row"><span>积分</span><strong>{balance === null ? '—' : balance}</strong></div>
                 <p className="platform-model-note">{configured ? '按供应商 token 成本的 2 倍扣积分，1 积分 = ¥0.01。每次调用都有输出上限，避免异常消耗。' : '平台模型尚未配置供应商 API Key，暂时无法调用；可以先充值，配置完成后即可使用。'}</p>
                 <div className="package-grid">{PACKAGES.map(pkg => <button key={pkg.id} type="button" className="package-card" onClick={() => topUp(pkg.id)}><strong>{pkg.label}</strong><span>{pkg.price}</span></button>)}</div>
+                <p className="platform-model-note">按量计费：一次 5 题模拟面试约 30～50 积分（悬停上方「按量计费」查看）。</p>
                 {payState && <p className="platform-model-note">{payState}</p>}
               </>
             ) : (

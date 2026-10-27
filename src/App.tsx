@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, UserRound, X } from 'lucide-react'
+import { fetchAccount, takeAuthNotice, type AccountUser } from './account'
 import { localEvaluation, offlineTasks, overallScore, questionScore, reportStats, speechStats, tentativeFillers, transcriptParagraphs } from './logic'
 import { captureReportAppearance, createReportHtml } from './reportExport'
 import DeviceSettings from './DeviceSettings'
@@ -69,6 +70,8 @@ export default function App() {
   const [pending, setPending] = useState<{ raw: string; segments: string[]; semantic: string; duration: number; events: Answer['events'] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [account, setAccount] = useState<AccountUser | null>(null)
+  const [accountReady, setAccountReady] = useState(false)
   const [selectedResult, setSelectedResult] = useState(0)
   const historyTimer = useRef<number | null>(null)
   const historyRef = useRef(history)
@@ -92,6 +95,14 @@ export default function App() {
   const liveParagraphs = useMemo(() => transcriptParagraphs(pending?.segments || [...recorder.segments, recorder.interim]), [pending?.segments, recorder.segments, recorder.interim])
 
   useEffect(() => { localStorage.setItem(providerKey, JSON.stringify({ baseUrl: provider.baseUrl, model: provider.model })); sessionStorage.setItem('echomind-api-key', provider.apiKey) }, [provider])
+  // 登录是可选的：没登录时接口返回 null，界面保持原样。
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetchAccount(controller.signal).then(state => { setAccount(state.user); setAccountReady(state.available) })
+    return () => controller.abort()
+  }, [])
+  // 登录回跳提示放在 effect 里读取，避免在渲染期间改地址栏。
+  useEffect(() => { const text = takeAuthNotice(); if (text) setNotice(text) }, [])
   useEffect(() => { sessionStorage.setItem('echomind-model-consent', privacyConsent ? 'yes' : 'no') }, [privacyConsent])
   useEffect(() => { document.documentElement.dataset.theme = theme; saveTheme(theme) }, [theme])
   useEffect(() => { if (!session) return; setHistory(current => newestFirst([session, ...current.filter(item => item.createdAt !== session.createdAt)])) }, [session])
@@ -278,7 +289,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand-group"><button className="brand" onClick={() => { if (stage === 'setup') setMode('interview') }} aria-label="EchoMind 首页"><Logo/></button><a className="beta-badge" href="/changelog" aria-label="查看更新日志">v{packageJson.version} Beta</a></div>
-      <div className="top-right"><span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
+      <div className="top-right">{accountReady ? (account ? <span className="account-chip" title={account.email || account.name}><span className="account-avatar" aria-hidden="true">{(account.name || account.email || 'S').slice(0, 1).toUpperCase()}</span><span className="account-name">{account.name || account.email}</span><a className="account-action" href="/auth/logout">退出</a></span> : <a className="account-login" href="/auth/login?returnTo=/"><UserRound size={15}/> 登录</a>) : null}<span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
     </header>
     <div className="layout">
       <aside className="sidebar">

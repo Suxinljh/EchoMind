@@ -121,3 +121,13 @@
     @apply font-sans;
   }
 }
+/* 统一账号：可选登录，不改变本地练习流程。 */
+.account-login,.account-chip{display:inline-flex;align-items:center;gap:7px;height:34px;border-radius:999px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap}
+.account-login{border:1px solid var(--app-line,#dfe6df);background:var(--app-surface,#fff);color:var(--app-primary-ink,#2c7151);padding:0 13px}
+.account-login:hover{background:var(--app-primary-soft,#eff5f0)}
+.account-chip{border:1px solid var(--app-line,#dfe6df);background:var(--app-surface,#fff);color:var(--app-ink,#31443a);padding:0 6px 0 5px;max-width:230px}
+.account-avatar{width:24px;height:24px;border-radius:50%;background:var(--app-primary,#27835c);color:var(--app-on-primary,#fff);display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
+.account-name{overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.account-action{color:var(--app-muted,#7d8b82);text-decoration:none;font-weight:500;padding:0 5px;border-left:1px solid var(--app-line,#e6ebe5);margin-left:1px}
+.account-action:hover{color:var(--app-primary-ink,#2c7151)}
+@media(max-width:600px){.account-name{display:none}.account-chip{max-width:none}.account-login{padding:0 11px}}

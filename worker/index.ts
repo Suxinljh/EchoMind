@@ -1,5 +1,6 @@
 import { CLOUD_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
 import type { ModelRequest } from '../src/modelProtocol'
+import { handleCallback, handleLogin, handleLogout, handleMe } from './auth'
 
 const modelFiles = new Set(['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt'])
 const modelPrefix = '/models/zipformer-2025/'
@@ -84,6 +85,10 @@ async function handleModelFile(request: Request, env: Env, name: string): Promis
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const pathname = new URL(request.url).pathname
+    if (pathname === '/auth/login') return handleLogin(request, env)
+    if (pathname === '/auth/callback') return handleCallback(request, env)
+    if (pathname === '/auth/logout') return handleLogout(request, env)
+    if (pathname === '/api/me') return handleMe(request, env)
     if (pathname === '/api/model') return handleModel(request)
     if (pathname.startsWith(modelPrefix)) return handleModelFile(request, env, pathname.slice(modelPrefix.length))
     return env.ASSETS.fetch(request)

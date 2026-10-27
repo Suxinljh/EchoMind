@@ -19,6 +19,7 @@ EchoMind 是一个在浏览器中练习表达的本地应用。它支持模拟�
 - **报告导出**：完成分析后，可在新标签页阅读报告，或下载独立 HTML 文件。
 - **自备模型**：可配置兼容 OpenAI Chat Completions 的服务，用于生成针对性问题和文字评估。未配置时仍可使用基础问题；需要模型分析的部分会标明待评估。
 - **设备与外观设置**：可保存默认麦克风、测试输入电平，并从 DaisyUI 主题、报纸风和 NeoBrutalism 风格中选择外观。
+- **可选统一账号**：右上角可用 Suxin 统一账号（login.ljhsu.xin）登录，用于后续云同步等能力；不登录也能完整使用本地练习。登录只保存用户 ID、昵称和邮箱到本站签名 Cookie。
 
 ## 界面预览
 
@@ -114,18 +115,30 @@ Cloudflare Workers Builds 连接此 GitHub 仓库时，生产分支选 `main`，
 
 云端模型服务只接受公开 HTTPS 域名；本机的 `localhost` 模型接口仍可用于本地运行，但 Cloudflare Worker 无法访问用户电脑上的服务。API Key 由浏览器当前标签页提交给本站 Worker，再转发给用户配置的模型服务，不作为构建或运行时密钥保存。
 
+统一账号登录使用 LoginSuxin 的 OIDC 服务，完全可选；不配置时右上角不显示登录入口。部署前在目标 Worker 上设置以下 secrets：
+
+```bash
+printf '%s' '客户端 ID'     | pnpm exec wrangler secret put OIDC_CLIENT_ID
+printf '%s' '客户端密钥'   | pnpm exec wrangler secret put OIDC_CLIENT_SECRET
+printf '%s' '签名密钥'     | pnpm exec wrangler secret put SESSION_SECRET   # openssl rand -base64 32
+printf '%s' 'https://login.ljhsu.xin/api/auth' | pnpm exec wrangler secret put OIDC_ISSUER
+```
+
+对应客户端需登记回调 `https://echomind.ljhsu.xin/auth/callback` 和登出后跳转 `https://echomind.ljhsu.xin/`。`/auth/*` 在 `wrangler.jsonc` 的 `run_worker_first` 里，本地 `vite preview` 不包含 Worker，因此不显示登录入口。
+
 维护者可在 macOS 上运行 `pnpm package:macos`，将当前构建产物、语音模型、本机服务和 Node.js 一起打包到 `release/`。打包前会校验 `dist/` 中确实有页面和四个语音模型文件，缺失时直接报错且不产出包。发布包仅面向打包机器的 CPU 架构；`release/` 不进入 Git。
 
 ## 隐私与数据
 
-音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置、语义稿，以及出题时从 JD 摘录的原文依据（若有），才会经当前站点的服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。
+音频在浏览器内处理，不上传，也不会保存在练习历史中。练习文字和报告保存在当前浏览器的本地存储中；模型接口地址和模型 ID 也保存在本机，API Key 只保存在当前标签页会话。只有用户配置自备模型并同意后，出题所需的岗位与 JD，或评估所需的题目、场景设置、语义稿，以及出题时从 JD 摘录的原文依据（若有），才会经当前站点的服务转发给模型提供商。提供商可能保存请求或计费，使用前请查看其条款。可选登录统一账号时，只把用户 ID、昵称和邮箱写进本站的签名 Cookie，不涉及练习文字或音频。
 
 ## 当前边界
 
 - 尚未完成目标 macOS Chrome 环境中的连续 20 分钟稳定性测试。
 - 语气词、重复表达和停顿统计仅供练习参考，不参与内容评分；不能视为准确率保证。
 - 自备模型的输出质量取决于提供商与模型。评分证据必须能在语义稿中找到，否则显示“无法评价”。
-- 不包含云端账户、跨设备同步或 Windows 适配。
+- 统一账号登录是可选的，但尚未实现跨设备同步；练习记录仍只在本机浏览器。
+- 不包含 Windows 适配。
 
 ## 遇到问题
 

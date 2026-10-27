@@ -1,6 +1,6 @@
 # EchoMind 项目交接
 
-更新于 2026-10-15。本文依据当前仓库代码与配置整理；线上状态以 Cloudflare 控制台和实际访问结果为准。
+更新于 2026-10-27。本文依据当前仓库代码与配置整理；线上状态以 Cloudflare 控制台和实际访问结果为准。
 
 ## 现在交付在哪里
 
@@ -73,6 +73,24 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 ~~~
 
 重复最后一个 GET 可观察 Cf-Cache-Status；若始终没有命中，先检查实际缓存规则，不要仅凭 Cache-Control 推断边缘已缓存。更换同名模型对象后，应检查并清理实际生效的缓存，或修改文件名及前端引用；浏览器也可能在 1 天内继续使用旧版本。
+
+## 统一账号（可选）
+
+站点接入 LoginSuxin 的 OIDC 服务（Issuer `https://login.ljhsu.xin/api/auth`），登录完全可选，不影响本地练习。
+
+| 项目 | 值 |
+| --- | --- |
+| 客户端 | EchoMind（client_id 只存在 Worker secret 中） |
+| 回调 | `https://echomind.ljhsu.xin/auth/callback` |
+| 登出后跳转 | `https://echomind.ljhsu.xin/` |
+| 相关路由 | `/auth/login`、`/auth/callback`、`/auth/logout`、`/api/me`（均先经 Worker） |
+| 会话 | `echomind_account` 签名 Cookie（HttpOnly、SameSite=Lax、30 天），只含 sub/昵称/邮箱 |
+
+需要的 Worker secrets：`OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET`、`OIDC_ISSUER`、`SESSION_SECRET`。缺少任意一个时登录入口不显示、`/auth/login` 返回 503，本地 `vite preview` 同样没有这些路由。
+
+实现文件是 `worker/auth.ts`（PKCE、state、HMAC 签名 Cookie、token 交换与 id_token 校验），前端只调用 `/api/me` 读取登录态。退出登录会清除本站 Cookie，再跳到 IdP 的 `end-session`，该页目前是 Better Auth 自带的英文确认页。若要改文案或换成自定义页面，需要在 LoginSuxin 侧调整。
+
+核对方式：未登录打开首页 → 右上角“登录” → 统一登录页登录/授权 → 回到 `/?auth_ok=1` 且显示昵称 → `curl https://echomind.ljhsu.xin/api/me` 返回 sub/name/email → 退出后 Cookie 清除、`/api/me` 返回 `{"user":null}`。
 
 ## macOS 发布包
 

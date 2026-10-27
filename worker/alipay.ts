@@ -20,7 +20,7 @@ export type CreditPackage = { id: string; label: string; amountCents: number; cr
 
 /** 目前只开放 1 分钱的沙箱体验包，避免误收真实款项。 */
 export const PACKAGES: Record<string, CreditPackage> = {
-  test: { id: 'test', label: '沙箱体验 · 100 积分', amountCents: 1, credits: 100 },
+  test: { id: 'test', label: '体验包 · 100 积分', amountCents: 1, credits: 100 },
 }
 
 const SANDBOX_GATEWAY = 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'

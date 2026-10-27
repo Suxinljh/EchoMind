@@ -129,7 +129,20 @@ async function handlePay(request: Request, env: Env): Promise<Response> {
     const contentType = request.headers.get('content-type') || ''
     if (!contentType.includes('application/x-www-form-urlencoded')) return new Response('failure', { status: 415 })
     const params = parseFormParams(await request.formData())
-    if (!(await verifyAlipayParams(payEnv, params))) return new Response('failure', { status: 400 })
+    const verified = await verifyAlipayParams(payEnv, params)
+    // 记录每次通知尝试（不存签名/买家信息），便于排查公网通知是否到达。
+    try {
+      await payEnv.DB.prepare('insert into pay_notify (id, out_trade_no, payload, created_at) values (?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), params.out_trade_no || '', JSON.stringify({
+          verified,
+          trade_status: params.trade_status || '',
+          app_id: params.app_id || '',
+          has_sign: Boolean(params.sign),
+          keys: Object.keys(params).sort(),
+        }), Date.now())
+        .run()
+    } catch { /* 诊断记录失败不影响通知应答 */ }
+    if (!verified) return new Response('failure', { status: 400 })
     if (params.trade_status === 'TRADE_SUCCESS' || params.trade_status === 'TRADE_FINISHED') {
       await markOrderPaid(payEnv, params.out_trade_no, params.trade_no || '')
     }

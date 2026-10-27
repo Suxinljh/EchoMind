@@ -144,8 +144,8 @@ export default function ModelSettings({
               <>
                 <div className="platform-model-row"><span>账号</span><strong>{account.name || account.email}</strong></div>
                 <div className="platform-model-row"><span>积分</span><strong>{balance === null ? '—' : balance}</strong></div>
-                <p className="platform-model-note">平台模型仍在准备中。可以先充值积分，上线后按实际用量扣减；当前试用包走支付宝沙箱，不会产生真实扣款。</p>
-                <button className="secondary-button" onClick={topUp}>充值 ¥0.01 · 100 积分（沙箱）</button>
+                <p className="platform-model-note">平台模型仍在准备中。可以先充值积分，上线后按实际用量扣减；下面是一笔 ¥0.01 的真实支付，用于验证收款链路。</p>
+                <button className="secondary-button" onClick={topUp}>充值 ¥0.01 · 100 积分（体验包）</button>
                 {payState && <p className="platform-model-note">{payState}</p>}
               </>
             ) : (

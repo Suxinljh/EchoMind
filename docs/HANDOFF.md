@@ -104,7 +104,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 | `GET /api/pay/return` | 同步回跳：验签后查询交易，成功才入账 |
 | `POST /api/pay/admin/{query,close,refund,refund-query}` | 需要 `x-pay-admin` 请求头，值为 `PAY_ADMIN_TOKEN` |
 
-数据在 D1 `echomind-credits`（绑定 `DB`），表为 `wallet`、`pay_order`、`credit_ledger`、`pay_notify`，迁移文件 `migrations/0001_pay.sql`。Worker secrets 需要 `ALIPAY_APP_ID`、`ALIPAY_PRIVATE_KEY`、`ALIPAY_PUBLIC_KEY`、`PAY_ADMIN_TOKEN`；当前部署的是匿名沙箱应用，不能收真实款项。沙箱配置在项目根的 `.alipay-sandbox.json`，已加入 `.gitignore`，禁止提交或对外分享。
+数据在 D1 `echomind-credits`（绑定 `DB`），表为 `wallet`、`pay_order`、`credit_ledger`、`pay_notify`，迁移文件 `migrations/0001_pay.sql`。Worker secrets 需要 `ALIPAY_APP_ID`、`ALIPAY_PRIVATE_KEY`、`ALIPAY_PUBLIC_KEY`、`PAY_ADMIN_TOKEN`；当前已切换为生产应用 `2021007112648879`（网关 `https://openapi.alipay.com/gateway.do`），并完成过一笔 ¥0.01 真实支付：同步回跳、交易查询、异步通知（HTTP 200）和积分入账均已验证。沙箱配置 `2021003176635074` 仅保留在本机 `.alipay-sandbox.json` 供开发测试。沙箱配置在项目根的 `.alipay-sandbox.json`，已加入 `.gitignore`，禁止提交或对外分享。生产支付宝公钥从 `~/.config/2021007112648879-alipayPublicKey.keytext` 读取后写入 Worker secret；应用私钥只由用户在 `wrangler secret put ALIPAY_PRIVATE_KEY` 时录入。
 
 验签要点：请求签名包含 `sign_type`，异步通知/同步回跳验签排除 `sign` 与 `sign_type`；异步通知必须幂等，只有首次把订单置为 `paid` 时才增加积分。正式上线前替换为生产应用密钥、补完签约与服务开通，并把沙箱体验包下架。
 

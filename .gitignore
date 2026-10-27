@@ -31,3 +31,4 @@ public/models/
 PLAN.md
 package-lock.json
 /.alipay-sandbox.json
+.pay-admin-token

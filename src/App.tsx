@@ -4,6 +4,7 @@ import { fetchAccount, takeAuthNotice, type AccountUser } from './account'
 import { localEvaluation, offlineTasks, overallScore, questionScore, reportStats, speechStats, tentativeFillers, transcriptParagraphs } from './logic'
 import { captureReportAppearance, createReportHtml } from './reportExport'
 import DeviceSettings from './DeviceSettings'
+import ModelSettings, { type ModelMode } from './ModelSettings'
 import Logo from './Logo'
 import SemanticEditor from './SemanticEditor'
 import packageJson from '../package.json'
@@ -52,6 +53,8 @@ function readHistory(): Session[] {
     return newestFirst(value.map(sanitizeSession).filter((item): item is Session => item !== null))
   } catch { return [] }
 }
+const modelModeKey = 'echomind-model-mode-v1'
+function readModelMode(): ModelMode { try { return localStorage.getItem(modelModeKey) === 'platform' ? 'platform' : 'own' } catch { return 'own' } }
 function readProvider(): Provider { try { return { ...initialProvider, ...JSON.parse(localStorage.getItem(providerKey) || '{}'), apiKey: sessionStorage.getItem('echomind-api-key') || '' } } catch { return initialProvider } }
 
 export default function App() {
@@ -60,12 +63,12 @@ export default function App() {
   const [interview, setInterview] = useState(initialInterview)
   const [report, setReport] = useState(initialReport)
   const [provider, setProvider] = useState(readProvider)
+  const [modelMode, setModelMode] = useState<ModelMode>(readModelMode)
   const [history, setHistory] = useState<Session[]>(readHistory)
   const [modePickerOpen, setModePickerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<'model' | 'device' | 'theme'>('model')
   const [theme, setTheme] = useState<ThemeId>(readTheme)
-  const [providerState, setProviderState] = useState('')
   const [privacyConsent, setPrivacyConsent] = useState(() => sessionStorage.getItem('echomind-model-consent') === 'yes')
   const [session, setSession] = useState<Session | null>(null)
   const [pending, setPending] = useState<{ raw: string; segments: string[]; semantic: string; duration: number; events: Answer['events'] } | null>(null)
@@ -86,7 +89,8 @@ export default function App() {
   sessionRef.current = session
   const recorder = useRecorder(stage === 'practice')
   const task = session?.tasks[session.current]
-  const readyForAI = !!provider.baseUrl && !!provider.model && privacyConsent
+  // 平台模型与积分仍在准备中；在网关上线前，平台模式只展示说明、不发起 AI 请求。
+  const readyForAI = modelMode === 'own' && !!provider.baseUrl && !!provider.model && privacyConsent
   const results = useMemo(() => session?.tasks.map(t => ({ task: t, answer: session.answers.find(a => a.taskId === t.id) })) || [], [session])
   const summaryStats = useMemo(() => session ? reportStats(session) : null, [session])
   const totalScore = session ? overallScore(session) : null
@@ -104,7 +108,18 @@ export default function App() {
   }, [])
   // 登录回跳提示放在 effect 里读取，避免在渲染期间改地址栏。
   useEffect(() => { const text = takeAuthNotice(); if (text) setNotice(text) }, [])
+  // 支付回跳结果；最终状态仍以服务端异步通知/查询为准。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const pay = params.get('pay')
+    if (!pay) return
+    setNotice(pay === 'success' ? '支付成功，积分已到账。' : pay === 'pending' ? '支付结果确认中，请稍后查看积分。' : '支付结果校验失败，未入账。')
+    params.delete('pay')
+    const query = params.toString()
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
+  }, [])
   useEffect(() => { sessionStorage.setItem('echomind-model-consent', privacyConsent ? 'yes' : 'no') }, [privacyConsent])
+  useEffect(() => { try { localStorage.setItem(modelModeKey, modelMode) } catch { /* 仅影响本机记忆，不影响当前使用。 */ } }, [modelMode])
   useEffect(() => { document.documentElement.dataset.theme = theme; saveTheme(theme) }, [theme])
   useEffect(() => { if (!session) return; setHistory(current => newestFirst([session, ...current.filter(item => item.createdAt !== session.createdAt)])) }, [session])
   // 写入 localStorage 放在 effect 主体内防抖，避免在 setState 更新函数里做副作用（StrictMode 会执行两次）。
@@ -320,7 +335,7 @@ export default function App() {
               <label className="field full">计划要点 <span className="hint">可选</span><textarea rows={4} value={report.outline} onChange={e => setReport({ ...report, outline: e.target.value })} placeholder="写下你准备覆盖的关键点；报告会据此检查覆盖情况"/></label>
             </div>}
           </section>
-          <section className="setup-model-row"><div className="model-notice"><Sparkles size={17}/><div><strong>{readyForAI ? '已填写模型配置' : '可先用基础问题练习'}</strong><span>{readyForAI ? '开始后会调用你设置的模型生成问题并评估文字。' : '连接自备模型后，可获得针对 JD 的问题和证据化反馈。'}</span></div></div><button className="secondary-button" onClick={() => setSettingsOpen(true)}>模型设置 <ArrowRight size={14}/></button></section>
+          <section className="setup-model-row"><div className="model-notice"><Sparkles size={17}/><div><strong>{readyForAI ? '已填写模型配置' : modelMode === 'platform' ? '平台模型内测中' : '可先用基础问题练习'}</strong><span>{readyForAI ? '开始后会调用你设置的模型生成问题并评估文字。' : modelMode === 'platform' ? '平台模型与积分即将上线，当前先使用基础问题。' : '连接自备模型后，可获得针对 JD 的问题和证据化反馈。'}</span></div></div><button className="secondary-button" onClick={() => setSettingsOpen(true)}>模型设置 <ArrowRight size={14}/></button></section>
         </div>}
         {stage === 'practice' && session && task && <div className="practice-page">
           <div className="page-topline"><button className="text-button" onClick={() => setModePickerOpen(true)}><ArrowLeft size={16}/> 新练习</button><span>环节 {session.current + 1} / {session.tasks.length}</span></div>
@@ -354,7 +369,7 @@ export default function App() {
             {!pending && recorder.status !== 'recording' && recorder.status !== 'paused' && recorder.status !== 'finishing' && <button className="skip-button" onClick={() => commitAnswer('skipped')}><SkipForward size={16}/> 跳过本题</button>}
           </div><aside className="practice-aside"><div className="tip-card"><div className="tip-icon"><Sparkles size={18}/></div><h3>实时提示</h3><p>{recorder.silenceHint ? '停顿有些长，试着先说结论或下一步。' : '先讲核心结论，再用事实和行动支撑。'}</p></div><div className="analysis-card"><h3>需要留意的表达</h3><div className="stat-group-title">语气词</div>{Object.entries(liveStats.fillers).map(([word, count]) => <div key={word}><span>“{word}”</span><strong>{count} 次</strong></div>)}<div className="stat-group-title">重复连接词</div>{Object.entries(liveStats.transitions).map(([word, count]) => <div key={word}><span>“{word}”</span><strong>{count} 次</strong></div>)}<div className="stat-group-title">节奏</div><div><span>长停顿</span><strong>{recorder.events.filter(e => e.kind === 'silence').length} 次</strong></div><small>根据实时转录与音量估算，仅供练习参考。</small></div></aside></div>
         </div>}
-        {stage === 'results' && session && <div className="results-page"><h1>练习报告</h1><p className="hero-copy">{session.mode === 'interview' ? '逐题查看回答、证据与下次练习建议。' : '回看完整汇报，检查目标、听众适配和内容覆盖。'}</p>{needsAnalysis && <div className="report-notice">{readyForAI ? '报告分析尚未完成。可根据已保存的语义稿补全。' : '配置大模型后，可生成逐题与整场分析。'}</div>}
+        {stage === 'results' && session && <div className="results-page"><h1>练习报告</h1><p className="hero-copy">{session.mode === 'interview' ? '逐题查看回答、证据与下次练习建议。' : '回看完整汇报，检查目标、听众适配和内容覆盖。'}</p>{needsAnalysis && <div className="report-notice">{readyForAI ? '报告分析尚未完成。可根据已保存的语义稿补全。' : modelMode === 'platform' ? '平台模型内测中，当前报告只包含基础统计。' : '配置大模型后，可生成逐题与整场分析。'}</div>}
           <div className="result-summary"><div><strong>{session.answers.filter(a => a.status === 'answered').length}</strong><span>已回答</span></div><div><strong>{session.answers.filter(a => a.status === 'skipped').length}</strong><span>已跳过</span></div><div><strong>{formatTime(session.answers.reduce((sum, a) => sum + a.duration, 0))}</strong><span>有效表达</span></div><div className="summary-actions">{needsAnalysis ? <button className="primary-button" disabled={busy} onClick={evaluateReport}><Sparkles size={16}/> {busy ? '正在分析…' : readyForAI ? '生成 / 补全分析报告' : '配置大模型'}</button> : <><button className="secondary-button" onClick={() => exportReport(true)}><ExternalLink size={16}/> 新标签页打开</button><button className="secondary-button" onClick={() => exportReport(false)}><Download size={16}/> 下载报告</button></>}</div></div>
           <section className="card overall-card"><div className="overall-head"><div><h2>整场分析</h2></div><div className="overall-score"><strong>{totalScore?.complete ? `${((totalScore.earned / totalScore.maximum) * 100).toFixed(1)}` : '待评估'}</strong><span>/ 100 分</span></div></div><p className="score-method">{totalScore?.complete ? `加权原始分 ${totalScore.earned.toFixed(1)} / ${totalScore.maximum}；按 100 分换算，跳过题计 0 分。` : '题目按各维度权重计算；证据不足或尚未完成评估时，暂不显示总分。跳过题计 0 分。'}</p><p className="overall-copy">{session.overallAnalysis?.summary || (readyForAI ? '点击“生成 / 补全分析报告”后，这里会显示整场练习的综合评价。' : '完成模型配置后可生成整场综合评价。')}</p>{session.overallAnalysis && <div className="overall-columns"><div><h3>做得较好</h3><ul>{session.overallAnalysis.strengths.map((item, i) => <li key={i}>{item}</li>)}</ul></div><div><h3>优先改进</h3><ul>{session.overallAnalysis.priorities.map((item, i) => <li key={i}>{item}</li>)}</ul></div></div>}</section>
           {summaryStats && <section className="card overall-card"><div className="section-heading"><h2>表达习惯</h2><span className="muted">基于原始转写与音量事件估算</span></div><div className="speech-overview"><div><h3>语气词</h3>{Object.entries(summaryStats.fillers).map(([word, count]) => <p key={word}>“{word}” <strong>{count} 次</strong></p>)}</div><div><h3>重复连接词</h3>{Object.entries(summaryStats.transitions).map(([word, count]) => <p key={word}>“{word}” <strong>{count} 次</strong></p>)}</div><div><h3>相邻重复表达</h3>{summaryStats.repeatedPhrases.length ? summaryStats.repeatedPhrases.map(([phrase, count]) => <p key={phrase}>“{phrase}” <strong>{count} 次</strong></p>) : <p>未检出</p>}</div><div><h3>长停顿</h3><p><strong>{summaryStats.pauses} 次</strong></p></div></div><p className="metrics-note">以上统计仅供练习参考，不参与内容评分。</p></section>}
@@ -377,6 +392,17 @@ export default function App() {
     {modePickerOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setModePickerOpen(false) }}><div className="mode-modal" role="dialog" aria-modal="true" aria-label="选择练习类型"><div className="modal-head"><div><h2>选择练习类型</h2></div><button className="icon-button" aria-label="关闭" onClick={() => setModePickerOpen(false)}><X size={20}/></button></div><p>选择场景后进入配置页面。</p><div className="mode-options"><button onClick={() => startNew('interview')}><Target size={22}/><span><strong>模拟面试</strong><small>根据岗位和 JD 练习逐题回答</small></span><ArrowRight size={17}/></button><button onClick={() => startNew('report')}><FileText size={22}/><span><strong>工作汇报</strong><small>围绕主题和听众练习连续表达</small></span><ArrowRight size={17}/></button></div></div></div>}
     {settingsOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSettingsOpen(false) }}><div className="settings-modal" role="dialog" aria-modal="true" aria-label="设置"><div className="modal-head"><div><h2>设置</h2></div><button className="icon-button" aria-label="关闭" onClick={() => setSettingsOpen(false)}><X size={20}/></button></div>
       <div className="settings-tabs" role="tablist" aria-label="设置类型"><button id="model-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'model'} aria-controls="model-settings-panel" className={settingsTab === 'model' ? 'active' : ''} onClick={() => setSettingsTab('model')}>模型设置</button><button id="device-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'device'} aria-controls="device-settings-panel" className={settingsTab === 'device' ? 'active' : ''} onClick={() => setSettingsTab('device')}>设备设置</button><button id="theme-settings-tab" type="button" role="tab" aria-selected={settingsTab === 'theme'} aria-controls="theme-settings-panel" className={settingsTab === 'theme' ? 'active' : ''} onClick={() => setSettingsTab('theme')}>主题风格</button></div>
-      {settingsTab === 'model' ? <div role="tabpanel" id="model-settings-panel" aria-labelledby="model-settings-tab"><p className="settings-intro">填写兼容 OpenAI Chat Completions 的服务。接口地址和模型 ID 保存在本机浏览器；API Key 保存在当前标签页会话中，调用时经当前网站的服务转发给提供商。</p><label className="field">接口根地址<input value={provider.baseUrl} onChange={e => setProvider({ ...provider, baseUrl: e.target.value })} placeholder="https://example.com/v1"/></label><label className="field">模型 ID<input value={provider.model} onChange={e => setProvider({ ...provider, model: e.target.value })} placeholder="你的模型名称"/></label><label className="field">API Key<input type="password" autoComplete="off" value={provider.apiKey} onChange={e => setProvider({ ...provider, apiKey: e.target.value })} placeholder="仅保存在当前标签页会话"/></label><div className="privacy-box"><ShieldCheck size={20}/><div><strong>发送范围</strong><p>出题时发送岗位和 JD；评估时发送题目、场景设置、可编辑的语义稿，以及出题时从 JD 摘录的原文依据（若有）。音频与原始转写不会发送。服务商可能保存或计费，请查看其条款。</p></div></div><label className="consent-row"><input type="checkbox" checked={privacyConsent} onChange={e => setPrivacyConsent(e.target.checked)}/> 我同意将上述文字发送给我配置的服务商</label><div className="modal-actions"><span>{providerState}</span><button className="secondary-button" disabled={!privacyConsent || !provider.baseUrl || !provider.model || busy} onClick={async () => { setBusy(true); setProviderState('正在测试，最多等待 20 秒…'); try { await (await import('./ai')).testProvider(provider); setProviderState('连接成功') } catch (error) { setProviderState(error instanceof Error ? error.message : String(error)) } finally { setBusy(false) } }}>测试连接</button><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></div> : settingsTab === 'device' ? <><DeviceSettings/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></> : <><ThemeSettings selected={theme} onSelect={setTheme}/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></>}</div></div>}
+      {settingsTab === 'model' ? <ModelSettings
+        mode={modelMode}
+        onModeChange={setModelMode}
+        provider={provider}
+        onProviderChange={setProvider}
+        privacyConsent={privacyConsent}
+        onPrivacyConsentChange={setPrivacyConsent}
+        busy={busy}
+        setBusy={setBusy}
+        account={account}
+        onDone={() => setSettingsOpen(false)}
+      /> : settingsTab === 'device' ? <><DeviceSettings/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></> : <><ThemeSettings selected={theme} onSelect={setTheme}/><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>完成</button></div></>}</div></div>}
   </div>
 }

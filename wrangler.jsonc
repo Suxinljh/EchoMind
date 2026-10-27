@@ -12,6 +12,9 @@
   "r2_buckets": [
     { "binding": "MODELS", "bucket_name": "app" }
   ],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "echomind-credits", "database_id": "515c48f9-0877-4480-9b6d-f7622e103a4b" }
+  ],
   "cache": {
     "enabled": true
   },

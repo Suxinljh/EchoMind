@@ -1,6 +1,20 @@
 import { CLOUD_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
 import type { ModelRequest } from '../src/modelProtocol'
-import { handleCallback, handleLogin, handleLogout, handleMe } from './auth'
+import { handleCallback, handleLogin, handleLogout, handleMe, readAccount } from './auth'
+import {
+  PACKAGES,
+  buildPagePayForm,
+  createOrder,
+  getBalance,
+  markOrderPaid,
+  parseFormParams,
+  refundQuery,
+  tradeClose,
+  tradeQuery,
+  tradeRefund,
+  verifyAlipayParams,
+  type PayEnv,
+} from './alipay'
 
 const modelFiles = new Set(['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt'])
 const modelPrefix = '/models/zipformer-2025/'
@@ -82,6 +96,84 @@ async function handleModelFile(request: Request, env: Env, name: string): Promis
   })
 }
 
+
+async function handlePay(request: Request, env: Env): Promise<Response> {
+  const payEnv = env as Env & PayEnv
+  const url = new URL(request.url)
+
+  if (url.pathname === '/api/pay/balance') {
+    const account = await readAccount(request, env)
+    if (!account) return json(401, { error: '请先登录' })
+    return json(200, { balance: await getBalance(payEnv, account.sub) })
+  }
+
+  if (url.pathname === '/api/pay/create') {
+    if (request.method !== 'POST') return json(405, { error: '只支持 POST' })
+    const account = await readAccount(request, env)
+    if (!account) return json(401, { error: '请先登录' })
+    const body = await request.json().catch(() => ({})) as { packageId?: string }
+    const pkg = PACKAGES[body.packageId || 'test']
+    if (!pkg) return json(400, { error: '未知的充值套餐' })
+    const outTradeNo = await createOrder(payEnv, account.sub, pkg)
+    const formHtml = await buildPagePayForm(payEnv, request, {
+      outTradeNo,
+      amountCents: pkg.amountCents,
+      subject: `EchoMind ${pkg.label}`,
+    })
+    return json(200, { outTradeNo, formHtml })
+  }
+
+  // 支付宝异步通知：必须验签、幂等、返回纯文本 success。
+  if (url.pathname === '/api/pay/notify') {
+    if (request.method !== 'POST') return new Response('failure', { status: 405 })
+    const contentType = request.headers.get('content-type') || ''
+    if (!contentType.includes('application/x-www-form-urlencoded')) return new Response('failure', { status: 415 })
+    const params = parseFormParams(await request.formData())
+    if (!(await verifyAlipayParams(payEnv, params))) return new Response('failure', { status: 400 })
+    if (params.trade_status === 'TRADE_SUCCESS' || params.trade_status === 'TRADE_FINISHED') {
+      await markOrderPaid(payEnv, params.out_trade_no, params.trade_no || '')
+    }
+    return new Response('success', { headers: { 'content-type': 'text/plain' } })
+  }
+
+  // 同步回跳只用于展示结果，最终以查询/异步通知为准。
+  if (url.pathname === '/api/pay/return') {
+    const params = Object.fromEntries(url.searchParams.entries())
+    if (!(await verifyAlipayParams(payEnv, params))) return Response.redirect(`${url.origin}/?pay=invalid`, 302)
+    const outTradeNo = params.out_trade_no || ''
+    try {
+      const order = await payEnv.DB.prepare('select status from pay_order where out_trade_no = ?').bind(outTradeNo).first<{ status: string }>()
+      if (order?.status === 'paid') return Response.redirect(`${url.origin}/?pay=success`, 302)
+      const result = await tradeQuery(payEnv, request, outTradeNo)
+      if (result.trade_status === 'TRADE_SUCCESS' || result.trade_status === 'TRADE_FINISHED') {
+        await markOrderPaid(payEnv, outTradeNo, String(result.trade_no || ''))
+        return Response.redirect(`${url.origin}/?pay=success`, 302)
+      }
+    } catch {
+      // 查询失败时交给异步通知或后续查询补偿。
+    }
+    return Response.redirect(`${url.origin}/?pay=pending`, 302)
+  }
+
+  if (url.pathname.startsWith('/api/pay/admin/')) {
+    if (request.method !== 'POST') return json(405, { error: '只支持 POST' })
+    const token = request.headers.get('x-pay-admin') || ''
+    if (!payEnv.PAY_ADMIN_TOKEN || token !== payEnv.PAY_ADMIN_TOKEN) return json(401, { error: '无权限' })
+    const body = await request.json().catch(() => ({})) as { outTradeNo?: string; amountCents?: number; refundNo?: string }
+    if (!body.outTradeNo) return json(400, { error: '缺少 outTradeNo' })
+    try {
+      if (url.pathname.endsWith('/refund')) return json(200, { result: await tradeRefund(payEnv, request, body.outTradeNo, body.amountCents || 1, body.refundNo || `R${Date.now()}`) })
+      if (url.pathname.endsWith('/refund-query')) return json(200, { result: await refundQuery(payEnv, request, body.outTradeNo, body.refundNo || '') })
+      if (url.pathname.endsWith('/close')) return json(200, { result: await tradeClose(payEnv, request, body.outTradeNo) })
+      if (url.pathname.endsWith('/query')) return json(200, { result: await tradeQuery(payEnv, request, body.outTradeNo) })
+    } catch (error) {
+      return json(400, { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  return json(404, { error: 'Not found' })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const pathname = new URL(request.url).pathname
@@ -89,6 +181,7 @@ export default {
     if (pathname === '/auth/callback') return handleCallback(request, env)
     if (pathname === '/auth/logout') return handleLogout(request, env)
     if (pathname === '/api/me') return handleMe(request, env)
+    if (pathname.startsWith('/api/pay/')) return handlePay(request, env)
     if (pathname === '/api/model') return handleModel(request)
     if (pathname.startsWith(modelPrefix)) return handleModelFile(request, env, pathname.slice(modelPrefix.length))
     return env.ASSETS.fetch(request)

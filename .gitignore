@@ -10,6 +10,8 @@ release/
 # Local credentials and settings
 .env
 .env.*
+.dev.vars
+.alipay-sandbox.json
 !.env.example
 .DS_Store
 .idea/
@@ -28,3 +30,4 @@ public/models/
 # Internal planning and the unused npm lockfile (pnpm is the project lockfile)
 PLAN.md
 package-lock.json
+/.alipay-sandbox.json

@@ -92,6 +92,22 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 
 核对方式：未登录打开首页 → 右上角“登录” → 统一登录页登录/授权 → 回到 `/?auth_ok=1` 且显示昵称 → `curl https://echomind.ljhsu.xin/api/me` 返回 sub/name/email → 退出后 Cookie 清除、`/api/me` 返回 `{"user":null}`。
 
+## 积分与支付（沙箱）
+
+支付走支付宝 AI 网页应用收款，代码在 `worker/alipay.ts`，路由在 `worker/index.ts`：
+
+| 路由 | 作用 |
+| --- | --- |
+| `POST /api/pay/create` | 登录后创建订单，返回支付宝页面跳转表单 |
+| `GET /api/pay/balance` | 当前用户积分余额 |
+| `POST /api/pay/notify` | 异步通知：验签、幂等入账、返回纯文本 `success` |
+| `GET /api/pay/return` | 同步回跳：验签后查询交易，成功才入账 |
+| `POST /api/pay/admin/{query,close,refund,refund-query}` | 需要 `x-pay-admin` 请求头，值为 `PAY_ADMIN_TOKEN` |
+
+数据在 D1 `echomind-credits`（绑定 `DB`），表为 `wallet`、`pay_order`、`credit_ledger`、`pay_notify`，迁移文件 `migrations/0001_pay.sql`。Worker secrets 需要 `ALIPAY_APP_ID`、`ALIPAY_PRIVATE_KEY`、`ALIPAY_PUBLIC_KEY`、`PAY_ADMIN_TOKEN`；当前部署的是匿名沙箱应用，不能收真实款项。沙箱配置在项目根的 `.alipay-sandbox.json`，已加入 `.gitignore`，禁止提交或对外分享。
+
+验签要点：请求签名包含 `sign_type`，异步通知/同步回跳验签排除 `sign` 与 `sign_type`；异步通知必须幂等，只有首次把订单置为 `paid` 时才增加积分。正式上线前替换为生产应用密钥、补完签约与服务开通，并把沙箱体验包下架。
+
 ## macOS 发布包
 
 在目标架构的 macOS 上准备本地模型并运行：

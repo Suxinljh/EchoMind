@@ -120,7 +120,7 @@ function withParam(path: string, key: string, value: string): string {
   return `${path}${separator}${key}=${encodeURIComponent(value)}`
 }
 
-async function readAccount(request: Request, env: AuthEnv): Promise<Account | null> {
+export async function readAccount(request: Request, env: AuthEnv): Promise<Account | null> {
   if (!env.SESSION_SECRET) return null
   const token = readCookie(request, SESSION_COOKIE)
   if (!token) return null

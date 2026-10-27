@@ -466,3 +466,138 @@
     height: calc(100vh - 64px);
   }
 }
+
+
+/* ---------- 模型模式开关与平台模型面板（所有主题） ---------- */
+
+.model-mode-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-subtle);
+}
+
+.model-mode-card strong {
+  display: block;
+  font-size: 13px;
+  color: var(--app-ink);
+}
+
+.model-mode-card p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--app-muted);
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--app-muted) 28%, var(--app-surface));
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--app-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  transition: transform 0.16s ease;
+}
+
+.switch[aria-checked="true"] {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+}
+
+.switch[aria-checked="true"] span {
+  transform: translateX(18px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.platform-model-panel {
+  padding: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface);
+}
+
+.platform-model-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.platform-model-head strong {
+  font-size: 14px;
+  color: var(--app-ink);
+}
+
+.platform-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--app-primary-soft);
+  color: var(--app-primary-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.platform-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--app-line);
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.platform-model-row strong {
+  color: var(--app-ink);
+  font-weight: 600;
+}
+
+.platform-model-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--app-muted);
+}
+
+.platform-model-consent {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-line);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--app-muted);
+}
+
+.platform-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  text-decoration: none;
+}

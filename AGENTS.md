@@ -39,6 +39,7 @@ pnpm dev 不是 Vite 热更新服务；改完代码须重启。当前 ASR WASM �
 
 - 音频在浏览器内处理，不把音频或原始转写发给模型提供商。原始转写与可修订语义稿分开；分析只使用语义稿，评分证据必须来自其中的连续原文。语气词、重复和停顿是参考指标，不参与内容评分。
 - 练习历史、模型地址和模型 ID 使用浏览器 localStorage；API Key 与发送同意状态使用当前标签页 sessionStorage。改动存储或请求内容时同步检查隐私说明和旧数据兼容性。
+- 默认主题（翡翠）的 HeroUI 风格打磨集中在 src/ui.css，规则限定在 :root[data-theme="emerald"]；改样式时不要影响报纸风、粗犷风等其他主题。
 - 统一登录（LoginSuxin OIDC）是可选的：`worker/auth.ts` 用 PKCE + 签名 Cookie 只保存 sub、昵称和邮箱，不建立数据库，也不上传练习内容。缺少 `OIDC_*` 或 `SESSION_SECRET` 时登录入口必须隐藏、本地练习不受影响；改动认证流程时同步更新 HANDOFF 的核对步骤。
 - 前端只调用同源 /api/model。本地实现与云端实现分别在 server/modelRoute.ts 和 worker/index.ts；改动协议、校验、超时或错误处理时检查两条路径。云端只接受公开 HTTPS 提供商域名，本地允许 localhost；不要把用户 API Key 写入构建产物、日志或部署密钥。
 - 四个 ASR 文件名固定为 encoder.onnx、decoder.onnx、joiner.onnx、tokens.txt。本地从 benchmarks/private/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30/ 准备到 public/models/zipformer-2025/；云端从 R2 桶 app 的 echomind/ 前缀读取。模型文件和私人录音不入 Git。pnpm build:cloudflare 会从静态产物移除模型。

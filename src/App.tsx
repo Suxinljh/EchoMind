@@ -13,6 +13,7 @@ import type { Answer, InterviewSettings, Mode, Provider, ReportSettings, Session
 import { useRecorder } from './useRecorder'
 import './styles.css'
 import './theme.css'
+import './ui.css'
 import './report.css'
 
 const initialInterview: InterviewSettings = { position: '', jd: '', questionCount: 5, includeIntro: true, includeCandidate: true }

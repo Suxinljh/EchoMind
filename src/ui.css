@@ -1,0 +1,417 @@
+/*
+ * 默认主题（emerald）的样式打磨。
+ *
+ * 目标：按 HeroUI 的规范统一圆角、间距、边距和背景层级，
+ * 不改变报纸风、粗犷风等其他主题的观感，所以所有规则都限定在
+ * :root[data-theme="emerald"] 下。
+ */
+
+:root[data-theme="emerald"] {
+  /* 圆角：输入框 10、按钮 10、卡片 16、弹窗 18 */
+  --radius-box: 0.75rem;
+  --radius-field: 0.625rem;
+  --radius-selector: 0.625rem;
+
+  --ui-r-sm: 0.5rem;
+  --ui-r-md: 0.625rem;
+  --ui-r-lg: 0.875rem;
+  --ui-r-xl: 1rem;
+  --ui-r-2xl: 1.125rem;
+
+  /* 背景层级：页面 base-200，卡片 base-100，弱化区块取两者混合 */
+  --ui-page: var(--color-base-200);
+  --ui-surface: var(--color-base-100);
+  --ui-subtle: color-mix(in oklab, var(--color-base-200) 55%, var(--color-base-100));
+  --ui-line: color-mix(in oklab, var(--color-base-content) 11%, var(--color-base-100));
+  --ui-line-soft: color-mix(in oklab, var(--color-base-content) 7%, var(--color-base-100));
+  --ui-shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 12px 32px -24px rgb(16 24 40 / 0.28);
+  --ui-shadow-pop: 0 24px 60px -24px rgb(16 24 40 / 0.35), 0 4px 12px rgb(16 24 40 / 0.06);
+  --ui-ring: 0 0 0 3px color-mix(in oklab, var(--color-primary) 18%, transparent);
+}
+
+/* ---------- 背景与圆角 ---------- */
+
+:root[data-theme="emerald"] body {
+  background: var(--ui-page);
+}
+
+:root[data-theme="emerald"] .card,
+:root[data-theme="emerald"] .result-summary,
+:root[data-theme="emerald"] .result-nav {
+  border-radius: var(--ui-r-xl);
+  border-color: var(--ui-line);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+}
+
+:root[data-theme="emerald"] .tip-card,
+:root[data-theme="emerald"] .analysis-card,
+:root[data-theme="emerald"] .overall-card,
+:root[data-theme="emerald"] .result-card,
+:root[data-theme="emerald"] .setup-model-row,
+:root[data-theme="emerald"] .device-test-card,
+:root[data-theme="emerald"] .report-actions,
+:root[data-theme="emerald"] .mode-options button {
+  border-radius: var(--ui-r-lg);
+  border-color: var(--ui-line);
+}
+
+:root[data-theme="emerald"] .tip-card,
+:root[data-theme="emerald"] .analysis-card {
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+}
+
+:root[data-theme="emerald"] .setup-model-row,
+:root[data-theme="emerald"] .report-notice,
+:root[data-theme="emerald"] .report-actions,
+:root[data-theme="emerald"] .privacy-box,
+:root[data-theme="emerald"] .confirm-panel,
+:root[data-theme="emerald"] .device-test-card,
+:root[data-theme="emerald"] .transcript-area,
+:root[data-theme="emerald"] .transcript-pair > div:first-child,
+:root[data-theme="emerald"] .question-recap,
+:root[data-theme="emerald"] .question-review,
+:root[data-theme="emerald"] .overall-columns > div,
+:root[data-theme="emerald"] .speech-overview > div,
+:root[data-theme="emerald"] .next-step {
+  background: var(--ui-subtle);
+  border-color: var(--ui-line-soft);
+}
+
+:root[data-theme="emerald"] .speech-overview > div,
+:root[data-theme="emerald"] .overall-columns > div,
+:root[data-theme="emerald"] .next-step,
+:root[data-theme="emerald"] .question-recap,
+:root[data-theme="emerald"] .privacy-box,
+:root[data-theme="emerald"] .confirm-panel {
+  border-radius: var(--ui-r-md);
+}
+
+:root[data-theme="emerald"] .primary-button,
+:root[data-theme="emerald"] .secondary-button,
+:root[data-theme="emerald"] .new-practice-button,
+:root[data-theme="emerald"] .history-item,
+:root[data-theme="emerald"] .setup-mode-label,
+:root[data-theme="emerald"] .icon-button {
+  border-radius: var(--ui-r-md);
+}
+
+:root[data-theme="emerald"] .settings-modal,
+:root[data-theme="emerald"] .mode-modal {
+  border-radius: var(--ui-r-2xl);
+  border: 1px solid var(--ui-line);
+  box-shadow: var(--ui-shadow-pop);
+}
+
+:root[data-theme="emerald"] .toast {
+  border-radius: var(--ui-r-md);
+  box-shadow: var(--ui-shadow-pop);
+}
+
+/* ---------- 表单 ---------- */
+
+/* 原来的 flex 布局会把必填星号挤到单独一行；改成块级后用间距控制。 */
+:root[data-theme="emerald"] .field {
+  position: relative;
+  display: block;
+}
+
+:root[data-theme="emerald"] .field > input,
+:root[data-theme="emerald"] .field > textarea,
+:root[data-theme="emerald"] .field > select {
+  margin-top: 8px;
+}
+
+:root[data-theme="emerald"] .field .hint {
+  position: absolute;
+  top: 1px;
+  right: 0;
+}
+
+:root[data-theme="emerald"] .field input,
+:root[data-theme="emerald"] .field textarea,
+:root[data-theme="emerald"] .field select,
+:root[data-theme="emerald"] .device-picker select {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: var(--ui-r-md);
+  border-color: var(--ui-line);
+  background: var(--ui-surface);
+}
+
+:root[data-theme="emerald"] .field input:focus,
+:root[data-theme="emerald"] .field textarea:focus,
+:root[data-theme="emerald"] .field select:focus {
+  border-color: var(--color-primary);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-ring);
+  outline: none;
+}
+
+:root[data-theme="emerald"] button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- 控件尺寸 ---------- */
+
+:root[data-theme="emerald"] .primary-button,
+:root[data-theme="emerald"] .secondary-button {
+  min-height: 40px;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+:root[data-theme="emerald"] .primary-button:hover,
+:root[data-theme="emerald"] .secondary-button:hover {
+  transform: none;
+}
+
+:root[data-theme="emerald"] .secondary-button {
+  background: var(--ui-subtle);
+  color: var(--app-ink);
+  border: 1px solid var(--ui-line);
+}
+
+:root[data-theme="emerald"] .secondary-button:hover {
+  background: color-mix(in oklab, var(--ui-subtle) 55%, var(--ui-line));
+  border-color: var(--ui-line);
+  color: var(--app-ink);
+}
+
+:root[data-theme="emerald"] .privacy-chip {
+  padding: 5px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 999px;
+  background: var(--ui-subtle);
+}
+
+/* ---------- 桌面端间距 ---------- */
+
+@media (min-width: 901px) {
+  :root[data-theme="emerald"] .topbar {
+    height: 64px;
+    padding: 0 28px;
+    border-bottom-color: var(--ui-line);
+    background: var(--ui-surface);
+  }
+
+  :root[data-theme="emerald"] .layout {
+    grid-template-columns: 248px minmax(0, 1fr);
+    min-height: calc(100vh - 64px);
+  }
+
+  :root[data-theme="emerald"] .sidebar {
+    top: 64px;
+    height: calc(100vh - 64px);
+    padding: 24px 14px;
+    border-right-color: var(--ui-line);
+    background: var(--ui-surface);
+  }
+
+  :root[data-theme="emerald"] .main-area {
+    padding: 0 36px 72px;
+  }
+
+  :root[data-theme="emerald"] .home-page {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    max-width: 760px;
+    min-height: calc(100vh - 64px - 72px);
+    margin: 0;
+    padding: 0 0 8px;
+  }
+
+  :root[data-theme="emerald"] .setup-page {
+    padding-top: 44px;
+  }
+
+  :root[data-theme="emerald"] .results-page {
+    padding-top: 28px;
+  }
+
+  /* 标题层级 */
+  :root[data-theme="emerald"] .home-page h1 {
+    font-size: clamp(32px, 3.2vw, 44px);
+    letter-spacing: -1.2px;
+    line-height: 1.16;
+    margin: 0 0 12px;
+  }
+
+  :root[data-theme="emerald"] .setup-page h1,
+  :root[data-theme="emerald"] .results-page h1 {
+    font-size: 32px;
+    letter-spacing: -0.8px;
+    line-height: 1.24;
+    margin: 10px 0 8px;
+  }
+
+  :root[data-theme="emerald"] .practice-heading h1 {
+    font-size: 30px;
+    letter-spacing: -0.6px;
+  }
+
+  :root[data-theme="emerald"] .hero-copy {
+    max-width: 620px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  :root[data-theme="emerald"] .home-page .primary-button {
+    min-height: 44px;
+    margin-top: 30px;
+    padding: 12px 20px;
+  }
+
+  /* 侧边栏 */
+  :root[data-theme="emerald"] .new-practice-button {
+    padding: 11px 14px;
+    font-size: 13px;
+    box-shadow: none;
+  }
+
+  :root[data-theme="emerald"] .sidebar-label {
+    padding: 0 12px;
+    margin-bottom: 10px;
+  }
+
+  :root[data-theme="emerald"] .history-list {
+    gap: 4px;
+  }
+
+  :root[data-theme="emerald"] .history-item {
+    padding: 9px 10px;
+  }
+
+  :root[data-theme="emerald"] .sidebar-divider {
+    margin: 18px 8px;
+  }
+
+  :root[data-theme="emerald"] .empty-history {
+    padding: 10px 12px;
+  }
+
+  :root[data-theme="emerald"] .sidebar-bottom {
+    padding-top: 18px;
+  }
+
+  /* 场景设定 */
+  :root[data-theme="emerald"] .setup-toolbar {
+    margin: 24px 0 20px;
+  }
+
+  :root[data-theme="emerald"] .setup-mode-label {
+    padding: 8px 12px;
+    margin: 0;
+  }
+
+  :root[data-theme="emerald"] .setup-card {
+    padding: 26px 28px 28px;
+  }
+
+  :root[data-theme="emerald"] .section-heading h2 {
+    margin-top: 8px;
+    font-size: 18px;
+  }
+
+  :root[data-theme="emerald"] .form-grid {
+    gap: 18px 20px;
+    margin-top: 24px;
+  }
+
+  :root[data-theme="emerald"] .setup-model-row {
+    margin-top: 16px;
+    padding: 14px 18px;
+  }
+
+  /* 练习页 */
+  :root[data-theme="emerald"] .page-topline {
+    margin: 24px 0 14px;
+  }
+
+  :root[data-theme="emerald"] .practice-heading {
+    margin: 0 0 18px;
+  }
+
+  :root[data-theme="emerald"] .practice-grid {
+    gap: 20px;
+  }
+
+  :root[data-theme="emerald"] .question-card {
+    padding: 26px 28px;
+  }
+
+  :root[data-theme="emerald"] .recording-card {
+    margin-top: 16px;
+    padding: 24px 26px;
+  }
+
+  :root[data-theme="emerald"] .transcript-area {
+    min-height: 200px;
+    margin-top: 20px;
+    padding: 16px 18px;
+  }
+
+  :root[data-theme="emerald"] .tip-card,
+  :root[data-theme="emerald"] .analysis-card {
+    padding: 18px 20px;
+  }
+
+  /* 报告页 */
+  :root[data-theme="emerald"] .result-summary {
+    margin: 24px 0 20px;
+  }
+
+  :root[data-theme="emerald"] .result-summary div {
+    padding: 18px 24px;
+  }
+
+  :root[data-theme="emerald"] .results-grid {
+    gap: 20px;
+  }
+
+  :root[data-theme="emerald"] .result-nav {
+    padding: 6px;
+  }
+
+  :root[data-theme="emerald"] .result-nav button {
+    padding: 10px 9px;
+  }
+
+  :root[data-theme="emerald"] .result-card,
+  :root[data-theme="emerald"] .overall-card {
+    padding: 24px 26px;
+    margin-bottom: 16px;
+  }
+
+  /* 弹层 */
+  :root[data-theme="emerald"] .settings-modal,
+  :root[data-theme="emerald"] .mode-modal {
+    padding: 26px;
+  }
+
+  :root[data-theme="emerald"] .settings-tabs {
+    margin: 18px 0 16px;
+  }
+
+  :root[data-theme="emerald"] .mode-modal > p {
+    margin: 10px 0 18px;
+  }
+
+  :root[data-theme="emerald"] .mode-options {
+    gap: 8px;
+  }
+
+  :root[data-theme="emerald"] .mode-options button {
+    padding: 16px;
+  }
+
+  :root[data-theme="emerald"] .modal-actions {
+    gap: 10px;
+    margin-top: 22px;
+  }
+}

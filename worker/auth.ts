@@ -23,6 +23,7 @@ type SessionPayload = Account & { exp: number }
 type FlowPayload = { state: string; verifier: string; returnTo: string; exp: number }
 
 const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
@@ -51,7 +52,12 @@ function decodeJson<T>(value: string): T | null {
   try {
     const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
     const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
-    return JSON.parse(atob(padded)) as T
+    // atob 返回的是“每字符一个字节”的 Latin-1 字符串，直接 JSON.parse 会把
+    // 中文名（如 Google 返回的昵称）变成 åæ¯å 这类乱码，必须先还原成 UTF-8 字节。
+    const binary = atob(padded)
+    const bytes = new Uint8Array(binary.length)
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+    return JSON.parse(decoder.decode(bytes)) as T
   } catch {
     return null
   }

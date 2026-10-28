@@ -66,10 +66,30 @@ const server = createServer(async (req, res) => {
   }
 })
 
-server.listen(0, '127.0.0.1', () => {
+const host = '127.0.0.1'
+// 固定端口让 localStorage（练习历史、主题、模型配置）在每次启动时保持同一 origin。
+// 端口被占用时回退随机端口，但本次启动的数据不会在下次启动时保留。
+const preferredPort = Number(process.env.ECHOMIND_PORT) || 4174
+let fallbackTried = false
+
+function onListening() {
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('无法获取本机端口')
-  const url = `http://127.0.0.1:${address.port}/`
+  const url = `http://${host}:${address.port}/`
   console.log(`EchoMind 已启动：${url}`)
   if (process.platform === 'darwin' && process.env.ECHOMIND_NO_OPEN !== '1') spawn('open', [url], { stdio: 'ignore' }).unref()
+}
+
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE' && !fallbackTried) {
+    fallbackTried = true
+    console.warn(`端口 ${preferredPort} 已被占用，改用随机端口；本次启动的练习数据不会在下次启动时保留。`)
+    server.listen(0, host)
+    return
+  }
+  throw error
 })
+
+// 只注册一次 listening 回调，避免首次端口失败后回退时重复打开浏览器。
+server.once('listening', onListening)
+server.listen(preferredPort, host)

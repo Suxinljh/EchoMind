@@ -38,6 +38,6 @@ await build({
 const launcher = '#!/bin/sh\ncd "$(dirname "$0")" || exit 1\nexec ./node ./server.mjs\n'
 await writeFile(join(folder, 'Start EchoMind.command'), launcher)
 await chmod(join(folder, 'Start EchoMind.command'), 0o755)
-await writeFile(join(folder, 'README.txt'), `EchoMind ${version}\n\n双击「Start EchoMind.command」。浏览器会自动打开本机页面。保持终端窗口运行；关闭终端即停止服务。\n首次打开请允许浏览器使用麦克风。所有录音与转写在本机浏览器处理；练习历史保存在当前浏览器。\n本包内含中文 Zipformer 语音模型，不需要另外下载。文字出题与报告分析需要在设置中配置自己的模型服务和 API Key。\n\n语音模型来源：https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2\n原模型：https://huggingface.co/yuekai/icefall-asr-multi-zh-hans-zipformer-large\n`)
+await writeFile(join(folder, 'README.txt'), `EchoMind ${version}\n\n双击「Start EchoMind.command」。浏览器会自动打开本机页面。保持终端窗口运行；关闭终端即停止服务。\n默认地址是 http://127.0.0.1:4174/；固定端口用于保留浏览器里的练习历史。若端口被占用，会改用随机端口，本次启动的数据不会在下次启动时保留。\n首次打开请允许浏览器使用麦克风。所有录音与转写在本机浏览器处理；练习历史保存在当前浏览器。\n本包内含中文 Zipformer 语音模型，不需要另外下载。文字出题与报告分析需要在设置中配置自己的模型服务和 API Key。\n\n语音模型来源：https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2\n原模型：https://huggingface.co/yuekai/icefall-asr-multi-zh-hans-zipformer-large\n`)
 execFileSync('ditto', ['-c', '-k', '--keepParent', folder, `${folder}.zip`])
 console.log(`${folder}.zip`)

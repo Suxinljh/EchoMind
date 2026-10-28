@@ -3,8 +3,11 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { APICallError, generateText } from 'ai'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import { LOCAL_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
+import { LOCAL_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeepSeek, createRateLimiter, normalizeBaseURL, providerMessage, validateModelRequest } from '../src/modelProtocol'
 import type { ModelRequest } from '../src/modelProtocol'
+
+// 本机服务只面向单个用户；60 次/分钟足以覆盖 15 题面试和反复评估。
+const modelLimiter = createRateLimiter(60, 60_000)
 
 function send(res: ServerResponse, status: number, value: unknown) {
   if (res.writableEnded) return
@@ -26,6 +29,7 @@ export async function handleModelRequest(req: IncomingMessage, res: ServerRespon
   const origin = req.headers.origin || ''
   if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host) || origin !== `http://${host}`) { send(res, 403, { error: '只接受本机同源请求' }); return }
   if (req.method !== 'POST') { send(res, 405, { error: '只支持 POST' }); return }
+  if (!modelLimiter(req.socket.remoteAddress || 'local')) { send(res, 429, { error: '请求过于频繁，请稍后再试' }); return }
   let request: ModelRequest | undefined
   let isDeepSeek = false
   const controller = new AbortController()

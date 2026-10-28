@@ -16,6 +16,35 @@ export class ProviderFailure extends Error {
   constructor(readonly status: number, readonly body: string) { super('Provider request failed') }
 }
 
+export type RateLimiter = (key: string) => boolean
+
+/**
+ * 进程/isolate 内的滑动窗口限流。
+ * Workers 的 isolate 是分布式的，这是尽力而为的缓解，不是全局配额；
+ * 需要严格全局限流时应使用 Cloudflare Rate Limiting 绑定或 Durable Object。
+ */
+export function createRateLimiter(limit: number, windowMs: number, maxKeys = 10_000): RateLimiter {
+  const buckets = new Map<string, { count: number; resetAt: number }>()
+  return key => {
+    const now = Date.now()
+    const bucket = buckets.get(key)
+    if (!bucket || bucket.resetAt <= now) {
+      if (buckets.size >= maxKeys) {
+        for (const [item, value] of buckets) if (value.resetAt <= now) buckets.delete(item)
+        if (buckets.size >= maxKeys) {
+          const oldest = buckets.keys().next().value
+          if (oldest !== undefined) buckets.delete(oldest)
+        }
+      }
+      buckets.set(key, { count: 1, resetAt: now + windowMs })
+      return true
+    }
+    if (bucket.count >= limit) return false
+    bucket.count += 1
+    return true
+  }
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -81,9 +110,4 @@ export async function checkDeepSeek(provider: Provider, url: string, signal: Abo
   if (!models.ok) throw new ProviderFailure(models.status, modelsBody)
   const available = JSON.parse(modelsBody) as { data?: { id?: string }[] }
   if (!available.data?.some(item => item.id === provider.model.trim())) throw new Error(`模型 ID「${provider.model.trim()}」不在 DeepSeek 当前模型列表中`)
-  setPhase('验证账户余额')
-  const balance = await fetch(`${url}/user/balance`, { headers, signal })
-  const balanceBody = await balance.text()
-  if (!balance.ok) throw new ProviderFailure(balance.status, balanceBody)
-  if ((JSON.parse(balanceBody) as { is_available?: boolean }).is_available === false) throw new Error('DeepSeek 账户余额不可用于 API 调用')
 }

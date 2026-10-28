@@ -43,6 +43,12 @@ function ensureLegacyHistory() {
 }
 const providerKey = 'echomind-model-config-v1'
 const HISTORY_WRITE_DELAY_MS = 500
+function historyState(item: Session): string {
+  if (item.tasks.length === 0 || item.current >= item.tasks.length) return '已完成'
+  if (!item.answers.some(answer => answer.status === 'answered')) return '未开始'
+  return `继续 · ${item.current}/${item.tasks.length} 环节`
+}
+
 function readHistory(key: string): Session[] {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]')
@@ -347,8 +353,9 @@ export default function App() {
     practiceToken.current += 1
     cancelReportEvaluation()
     setSession(item); setMode(item.mode); setPending(null); setSelectedResult(0)
-    setStage(item.tasks.length === 0 || item.current >= item.tasks.length ? 'results' : 'practice')
-    setNotice('')
+    const complete = item.tasks.length === 0 || item.current >= item.tasks.length
+    setStage(complete ? 'results' : 'practice')
+    setNotice(complete ? '' : `已打开 ${new Date(item.createdAt).toLocaleDateString('zh-CN')} 的练习，从第 ${item.current + 1} 环节继续。`)
   }
 
   async function evaluateReport() {
@@ -422,7 +429,7 @@ export default function App() {
         <button className="new-practice-button" onClick={() => setModePickerOpen(true)}><Plus size={18}/> 新建练习</button>
         <div className="sidebar-divider"/>
         <div className="sidebar-label">练习历史</div>
-        {history.length === 0 ? <div className="empty-history">没有历史，快速开始</div> : <div className="history-list">{history.map(item => <button key={item.createdAt} className={`history-item ${session?.createdAt === item.createdAt ? 'active' : ''}`} onClick={() => openHistory(item)}><span className="history-icon">{item.mode === 'interview' ? <Target size={16}/> : <FileText size={16}/>}</span><span><strong>{item.mode === 'interview' ? (item.settings as InterviewSettings).position || '模拟面试' : (item.settings as ReportSettings).topic || '工作汇报'}</strong><small>{new Date(item.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.tasks.length === 0 || item.current >= item.tasks.length ? '已完成' : `${item.current}/${item.tasks.length} 环节`}</small></span></button>)}</div>}
+        {history.length === 0 ? <div className="empty-history">没有历史，快速开始</div> : <div className="history-list">{history.map(item => <button key={item.createdAt} className={`history-item ${session?.createdAt === item.createdAt ? 'active' : ''}`} onClick={() => openHistory(item)}><span className="history-icon">{item.mode === 'interview' ? <Target size={16}/> : <FileText size={16}/>}</span><span><strong>{item.mode === 'interview' ? (item.settings as InterviewSettings).position || '模拟面试' : (item.settings as ReportSettings).topic || '工作汇报'}</strong><small>{new Date(item.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {historyState(item)}</small></span></button>)}</div>}
         <div className="sidebar-meta"><a className="sidebar-link" href="/changelog"><BookOpen size={17}/> 更新日志 <ChevronRight size={14}/></a><a className="sidebar-link" href="https://github.com/Suxinljh/EchoMind" target="_blank" rel="noopener noreferrer"><GitBranch size={17}/> GitHub <ExternalLink size={14}/></a><div className="sidebar-bottom"><div className="sidebar-bottom-head"><ShieldCheck size={20}/><strong>隐私优先</strong></div><p>音频在浏览器内处理。练习文字保存在本机浏览器；启用模型后才会发送指定文字。</p></div></div>
       </aside>
       <main className="main-area">

@@ -57,5 +57,5 @@ pnpm dev 不是 Vite 热更新服务；改完代码须重启。当前 ASR WASM �
 
 1. 运行 git status --short，确认没有覆盖或顺带提交已有改动及私有材料。
 2. 运行 pnpm build；若修改 Cloudflare 交付，再运行 pnpm build:cloudflare 和 pnpm exec wrangler deploy --dry-run。
-3. 按改动范围实际检查首页、/changelog、模型文件加载、录音与转写、模型连接及报告。构建成功不代表麦克风、WASM、R2 和提供商请求都正常。
+3. 按改动范围实际检查首页、/changelog、模型文件加载、录音与转写、模型连接及报告。构建成功不代表麦克风、WASM、R2 和提供商请求都正常；真机检查按 `docs/manual-qa.md` 的清单执行（连续 20 分钟、充值退款、同步各自有对应小节）。
 4. 汇报修改文件、运行的命令与结果，以及尚未验证的事项。功能或部署流程变化时同步更新 README.md 与 docs/HANDOFF.md。

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Coins, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, Cloud, Coins, Download, ExternalLink, FileText, GitBranch, LockKeyhole, Mic, Pause, Play, Plus, RotateCcw, Settings2, ShieldCheck, SkipForward, Sparkles, Square, Target, UserRound, X } from 'lucide-react'
 import { fetchAccount, takeAuthNotice, type AccountUser } from './account'
+import { newestFirst, sanitizeSession } from './sessionUtils'
+import { syncHistory } from './sync'
 import { localEvaluation, offlineTasks, overallScore, questionScore, reportStats, speechStats, tentativeFillers, transcriptParagraphs } from './logic'
 import { captureReportAppearance, createReportHtml } from './reportExport'
 import DeviceSettings from './DeviceSettings'
@@ -41,28 +43,6 @@ function ensureLegacyHistory() {
 }
 const providerKey = 'echomind-model-config-v1'
 const HISTORY_WRITE_DELAY_MS = 500
-function newestFirst(items: Session[]): Session[] { return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)) }
-function isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value) }
-// 历史数据可能来自更早的版本或被手动改坏；逐条校验，坏条目丢弃而不是让整页白屏。
-function sanitizeSession(value: unknown): Session | null {
-  if (!isRecord(value)) return null
-  const mode = value.mode
-  if (mode !== 'interview' && mode !== 'report') return null
-  if (!Array.isArray(value.tasks) || !Array.isArray(value.answers)) return null
-  if (!isRecord(value.settings)) return null
-  if (typeof value.createdAt !== 'string' || Number.isNaN(Date.parse(value.createdAt))) return null
-  const tasksOk = value.tasks.every(task => isRecord(task) && typeof task.id === 'string' && typeof task.title === 'string' && typeof task.prompt === 'string')
-  const answersOk = value.answers.every(answer => isRecord(answer)
-    && typeof answer.taskId === 'string'
-    && typeof answer.semantic === 'string'
-    && Array.isArray(answer.events)
-    && (answer.evaluation === undefined || (isRecord(answer.evaluation) && Array.isArray(answer.evaluation.dimensions))))
-  if (!tasksOk || !answersOk) return null
-  if (value.overallAnalysis !== undefined && (!isRecord(value.overallAnalysis) || !Array.isArray(value.overallAnalysis.strengths) || !Array.isArray(value.overallAnalysis.priorities))) return null
-  const tasks = value.tasks as Task[]
-  const raw = typeof value.current === 'number' && Number.isFinite(value.current) ? Math.floor(value.current) : 0
-  return { ...(value as unknown as Session), current: Math.min(Math.max(0, raw), tasks.length) }
-}
 function readHistory(key: string): Session[] {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]')
@@ -100,6 +80,9 @@ export default function App() {
   const [creditsOpen, setCreditsOpen] = useState(false)
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([])
   const [usageLoading, setUsageLoading] = useState(false)
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
+  const syncingRef = useRef(false)
+  const skipNextSyncRef = useRef(false)
   const [selectedResult, setSelectedResult] = useState(0)
   const historyTimer = useRef<number | null>(null)
   const historyRef = useRef(history)
@@ -181,6 +164,43 @@ export default function App() {
       setMigration(null)
     }
   }, [accountReady, account?.sub])
+
+  async function runSync() {
+    if (!account || syncingRef.current) return
+    if (historyKey !== historyKeyFor(account.sub)) return
+    syncingRef.current = true
+    setSyncState('syncing')
+    try {
+      const result = await syncHistory(account.sub, historyRef.current)
+      if (!result.sessions) { setSyncState('error'); return }
+      if (result.changed) {
+        skipNextSyncRef.current = true
+        setHistory(result.sessions)
+      }
+      setSyncState('synced')
+    } finally {
+      syncingRef.current = false
+    }
+  }
+
+  // 登录后自动同步，不提供关闭开关；窗口重新聚焦和每 60 秒会再拉取一次。
+  useEffect(() => {
+    if (!account || !accountReady) { setSyncState('idle'); return }
+    if (historyKey !== historyKeyFor(account.sub)) return
+    void runSync()
+    const timer = window.setInterval(() => { void runSync() }, 60_000)
+    const onFocus = () => { void runSync() }
+    window.addEventListener('focus', onFocus)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
+  }, [account?.sub, accountReady, historyKey])
+
+  // 本地历史变化后延迟推送，避免连续编辑时频繁请求。
+  useEffect(() => {
+    if (!account || historyKey !== historyKeyFor(account.sub)) return
+    if (skipNextSyncRef.current) { skipNextSyncRef.current = false; return }
+    const timer = window.setTimeout(() => { void runSync() }, 1500)
+    return () => window.clearTimeout(timer)
+  }, [history])
 
   function importAnonymousHistory() {
     if (!account || !migration) return
@@ -395,7 +415,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand-group"><button className="brand" onClick={() => { if (stage === 'setup') setMode('interview') }} aria-label="EchoMind 首页"><Logo/></button><a className="beta-badge" href="/changelog" aria-label="查看更新日志">v{packageJson.version} Beta</a></div>
-      <div className="top-right">{account && credits !== null ? <button type="button" className="credits-chip" onClick={openCredits}><Coins size={14}/> {credits} 积分</button> : null}{accountReady ? (account ? <span className="account-chip" title={account.email || account.name}><span className="account-avatar" aria-hidden="true">{(account.name || account.email || 'S').slice(0, 1).toUpperCase()}</span><span className="account-name">{account.name || account.email}</span><a className="account-action" href="/auth/logout">退出</a></span> : <a className="account-login" href="/auth/login?returnTo=/"><UserRound size={15}/> 登录</a>) : null}<span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
+      <div className="top-right">{account ? <button type="button" className={`sync-chip ${syncState}`} onClick={() => void runSync()} title="练习记录会自动同步到当前账号"><Cloud size={14}/> {syncState === 'syncing' ? '同步中' : syncState === 'error' ? '同步失败' : '已同步'}</button> : null}{account && credits !== null ? <button type="button" className="credits-chip" onClick={openCredits}><Coins size={14}/> {credits} 积分</button> : null}{accountReady ? (account ? <span className="account-chip" title={account.email || account.name}><span className="account-avatar" aria-hidden="true">{(account.name || account.email || 'S').slice(0, 1).toUpperCase()}</span><span className="account-name">{account.name || account.email}</span><a className="account-action" href="/auth/logout">退出</a></span> : <a className="account-login" href="/auth/login?returnTo=/"><UserRound size={15}/> 登录</a>) : null}<span className="privacy-chip"><ShieldCheck size={15}/> 仅本地录音</span><button className="icon-button" aria-label="模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={19}/></button></div>
     </header>
     <div className="layout">
       <aside className="sidebar">

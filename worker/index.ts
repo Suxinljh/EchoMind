@@ -2,6 +2,7 @@ import { CLOUD_POLICY, MAX_REQUEST_BYTES, TIMEOUT_MS, ProviderFailure, checkDeep
 import type { ModelRequest } from '../src/modelProtocol'
 import { handleCallback, handleLogin, handleLogout, handleMe, readAccount } from './auth'
 import { handleCredits, handlePlatformModel, type PlatformEnv } from './platform'
+import { handleSync, type SyncEnv } from './sync'
 import {
   PACKAGES,
   buildPagePayForm,
@@ -196,6 +197,7 @@ export default {
     if (pathname === '/auth/logout') return handleLogout(request, env)
     if (pathname === '/api/me') return handleMe(request, env)
     if (pathname === '/api/platform-model') return handlePlatformModel(request, env as Env & PlatformEnv)
+    if (pathname === '/api/sync') return handleSync(request, env as Env & SyncEnv)
     if (pathname === '/api/credits' || pathname === '/api/credits/usage') return handleCredits(request, env as Env & PlatformEnv)
     if (pathname.startsWith('/api/pay/')) return handlePay(request, env)
     if (pathname === '/api/model') return handleModel(request)

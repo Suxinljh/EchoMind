@@ -101,7 +101,10 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 - 旧数据 `echomind-practice-history-v1` 会一次性复制到匿名存储，旧键保留作回退
 - 首次登录且存在匿名练习时，会询问是否导入当前账号；导入后清除匿名副本，并记录 `echomind-history-v2:migrated:<sub>`，之后不再重复询问
 - 退出登录后会回到匿名历史；导入过的账号数据不会出现在匿名里
-- 目前仍**没有跨设备同步**，D1 只存积分与订单，没有练习表；换设备/浏览器看不到历史
+- 登录后自动同步，无关闭开关；D1 `practice_sessions` 以 `(user_id, session_id)` 为主键，`session_id` 使用练习的 `createdAt`
+- 同步内容包含原始转写、语义稿、评分和报告，**不包含音频**；每条约 2MB、单次约 8MB 上限
+- 冲突按每个练习的 `updated_at` 最后写入优先；客户端用 `echomind-sync-v1:<sub>` 记录上次同步时间和内容哈希
+- 登录、窗口重新聚焦、每 60 秒、以及本地历史变化后 1.5 秒自动同步；顶部显示同步状态，点击可手动重试
 
 ## 积分与支付（沙箱）
 

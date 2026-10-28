@@ -151,7 +151,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 
 **2026-10-28 生产切换完成**：EchoMind 已设置 `CREDITS_APP_KEY`，`0004_platform_request` 已应用到远程 D1；导入 2 笔已支付订单（1 个账号，200 积分），账号中心余额与本地钱包一致。本地 `wallet` 保留 200 作为归档，不再读写。同一天随后应用了 `0005_platform_rate`、`0006_rate_limit`（限流计数表，`platform_rate` 已并入 `rate_limit`）。
 
-**退款通道已配置**：账号中心与 EchoMind 两端都已设置 `ECHOMIND_PAY_ADMIN_TOKEN` / `PAY_ADMIN_TOKEN`（值相同），审核通过会自动调支付宝原路退款。真实退款仍未做过端到端验证：第一次请用小额订单，并在审核后到支付宝商家后台核对退款单号与金额。
+**退款通道已配置**：账号中心与 EchoMind 两端都已设置 `ECHOMIND_PAY_ADMIN_TOKEN` / `PAY_ADMIN_TOKEN`（值相同），审核通过会自动调支付宝原路退款。2026-10-28 已用一笔 ¥1.00 订单做过真实端到端验证（管理员审核 → 原路退回成功）；后续改动退款链路时仍建议用小额订单复跑一次并在支付宝商家后台核对退款单号与金额。
 
 **原路退款超时**：账号中心调用 EchoMind 退款接口设了 10 秒超时；超时视为“结果未知”，明细标记 `failed` 并提示先到支付宝后台核对，不要直接重复点“重试失败项”，否则可能重复退款。
 
@@ -173,7 +173,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 - **Cloudflare Rate Limiting 绑定在本账号不生效**：曾配置 `MODEL_RATE_LIMITER` / `PLATFORM_RATE_LIMITER`，部署后各发 36/40 个请求全部放行（本地 `wrangler dev` 能正常限流），现已移除绑定配置，限额全部改用 D1 计数（线上验证：`/api/model` 第 31 个请求起 429）。
 - **每小时 Cron**（`wrangler.jsonc` 的 `triggers.crons` = `17 * * * *`）清理 `platform_request` 过期缓存与一天前的 `rate_limit` 窗口，单次最多 2000 行；请求路径里仍保留一个同口径的 200 行兜底清理。
 - 客户端为每次平台调用生成 `requestId`；网络错误时自动重试一次并复用同一 ID。服务端在 `platform_request` 表缓存已完成的结果（1 小时），同一 ID 的重试直接返回缓存、不重复调用上游、不重复扣费；过期缓存每次请求最多清理 200 行（`created_at` 有索引），不会随表体积变慢。
-- 当前充值套餐：¥1/100 积分、¥10/1000、¥50/5000，另可按积分自定义额度（50～1,000,000 积分，1 积分 = ¥0.01）。金额一律由服务端按积分重算（`customPackage`），不信任客户端传来的价格；账号中心 `/credits` 的充值入口跳转到 `https://echomind.ljhsu.xin/?recharge=<积分>`。充值仍由 EchoMind 的支付宝商户号收款，支付成功后调账号中心 `credit` 入账；退款由账号中心发起，`ECHOMIND_PAY_ADMIN_TOKEN`（与 EchoMind `PAY_ADMIN_TOKEN` 一致）已配置，但真实退款尚待小额端到端验证。
+- 当前充值套餐：¥1/100 积分、¥10/1000、¥50/5000，另可按积分自定义额度（50～1,000,000 积分，1 积分 = ¥0.01）。金额一律由服务端按积分重算（`customPackage`），不信任客户端传来的价格；账号中心 `/credits` 的充值入口跳转到 `https://echomind.ljhsu.xin/?recharge=<积分>`。充值仍由 EchoMind 的支付宝商户号收款，支付成功后调账号中心 `credit` 入账；退款由账号中心发起，`ECHOMIND_PAY_ADMIN_TOKEN`（与 EchoMind `PAY_ADMIN_TOKEN` 一致）已配置并通过 ¥1.00 小额订单验证过原路退回。
 
 ## macOS 发布包
 

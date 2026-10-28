@@ -170,7 +170,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 - 未设置 `CREDITS_APP_KEY` 时保持旧路径：扣余额、写台账、写用量在同一个 D1 batch 中完成，余额不足时不会扣成负数。余额在顶部「积分」按钮中查看，点击可看最近 20 条真实 token 用量。
 - 平台模型上游请求 60 秒超时，并监听客户端断开后中止上游，避免客户端放弃后仍继续生成/计费。
 - `/api/platform-model` 按账号限流 20 次/60 秒：计数在 D1 表 `platform_rate`（`migrations/0005_platform_rate.sql`，每次调用一次 upsert，窗口对齐 60 秒），在扣费与上游调用之前拦截，超限返回 429 + `Retry-After`。
-- **已知问题**：Cloudflare Rate Limiting 绑定在本账号的生产环境实测不生效——`MODEL_RATE_LIMITER`（30/60 秒）与 `PLATFORM_RATE_LIMITER`（20/60 秒）部署后各发 36/40 个请求全部放行（本地 `wrangler dev` 能正常限流），所以 `/api/model` 目前只有 isolate 内存限流作为兵底；要提高保障度需改成 D1/DO 计数器，或向 Cloudflare 确认该账号的绑定配额。
+- **已知问题**：Cloudflare Rate Limiting 绑定在本账号的生产环境实测不生效——`MODEL_RATE_LIMITER`（30/60 秒）与 `PLATFORM_RATE_LIMITER`（20/60 秒）部署后各发 36/40 个请求全部放行（本地 `wrangler dev` 能正常限流），所以两个接口的真正限额都改用 D1 固定窗口计数（见上一条，线上已验证第 31 个请求起 429）。绑定配置仍保留作为前置的尽力拦截；如果确认这个账号永远不生效，可以移除两个 `ratelimits` 绑定和 `worker/index.ts` 里的调用，避免误以为它们有效。
 - 客户端为每次平台调用生成 `requestId`；网络错误时自动重试一次并复用同一 ID。服务端在 `platform_request` 表缓存已完成的结果（1 小时），同一 ID 的重试直接返回缓存、不重复调用上游、不重复扣费；过期缓存每次请求最多清理 200 行（`created_at` 有索引），不会随表体积变慢。
 - 当前充值套餐：¥1/100 积分、¥10/1000、¥50/5000，另可按积分自定义额度（50～1,000,000 积分，1 积分 = ¥0.01）。金额一律由服务端按积分重算（`customPackage`），不信任客户端传来的价格；账号中心 `/credits` 的充值入口跳转到 `https://echomind.ljhsu.xin/?recharge=<积分>`。充值仍由 EchoMind 的支付宝商户号收款，支付成功后调账号中心 `credit` 入账；退款由账号中心发起，`ECHOMIND_PAY_ADMIN_TOKEN`（与 EchoMind `PAY_ADMIN_TOKEN` 一致）已配置，但真实退款尚待小额端到端验证。
 

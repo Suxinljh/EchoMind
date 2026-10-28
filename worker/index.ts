@@ -31,6 +31,8 @@ const modelPrefix = '/models/zipformer-2025/'
 const modelLimiter = createRateLimiter(30, 60_000)
 // 平台模型直接消耗账号积分调上游供应商，比自带 Key 的 /api/model 更需要防刷。
 const platformLimiter = createRateLimiter(20, 60_000)
+// Cron 单次最多清理的行数，避免一次删太多。
+const CLEANUP_BATCH_SIZE = 2_000
 
 function json(status: number, value: unknown, headers: Record<string, string> = {}): Response {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store', ...headers } })
@@ -55,35 +57,21 @@ async function readRequest(request: Request): Promise<ModelRequest> {
 }
 
 /** 平台模型限流：先于扣费与上游调用，避免被刷时先产生成本。 */
-async function limitPlatformModel(request: Request, env: Env): Promise<Response | null> {
+function limitPlatformModel(request: Request): Response | null {
   const key = request.headers.get('cf-connecting-ip') || 'unknown'
-  let allowed = false
-  if (env.PLATFORM_RATE_LIMITER) {
-    try { allowed = (await env.PLATFORM_RATE_LIMITER.limit({ key })).success }
-    catch { allowed = platformLimiter(key) }
-  } else {
-    allowed = platformLimiter(key)
-  }
-  // 绑定在本账号的生产环境不生效，按 IP 的 D1 计数才是真正的前置限额。
-  if (allowed) allowed = await allowRequest(env, 'platform_ip', key, 20, 60_000)
-  if (!allowed) return json(429, { error: '请求过于频繁，请稍后再试' }, { 'Retry-After': '60' })
-  return null
+  // 便宜的 isolate 内存预筛（绑定的 Rate Limiting 在本账号实测不生效，已移除）；
+  // 真正生效的限额是按账号的 D1 计数，在 handlePlatformModel 里于扣费前执行。
+  if (platformLimiter(key)) return null
+  return json(429, { error: '请求过于频繁，请稍后再试' }, { 'Retry-After': '60' })
 }
 
 async function handleModel(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: '只支持 POST' })
   if (request.headers.get('Origin') !== new URL(request.url).origin) return json(403, { error: '只接受同源请求' })
   const client = request.headers.get('cf-connecting-ip') || 'unknown'
-  let allowed = false
-  if (env.MODEL_RATE_LIMITER) {
-    // 绑定按数据中心计数；本地 dev 不支持时回退到 isolate 内存限流。
-    try { allowed = (await env.MODEL_RATE_LIMITER.limit({ key: client })).success }
-    catch { allowed = modelLimiter(client) }
-  } else {
-    allowed = modelLimiter(client)
-  }
-  // 绑定在本账号的生产环境不生效（实测连续请求全部放行），D1 计数才是真正生效的 30 次/60 秒。
-  if (allowed) allowed = await allowRequest(env, 'model', client, 30, 60_000)
+  // isolate 内存预筛后，再用 D1 固定窗口计数做真正生效的限额（每 IP 30 次/60 秒）。
+  // Cloudflare Rate Limiting 绑定在本账号的生产环境实测不生效，已移除绑定配置。
+  const allowed = modelLimiter(client) && await allowRequest(env, 'model', client, 30, 60_000)
   if (!allowed) return json(429, { error: '请求过于频繁，请稍后再试' }, { 'Retry-After': '60' })
   let input: ModelRequest | undefined
   const controller = new AbortController()
@@ -279,7 +267,7 @@ export default {
     if (pathname === '/auth/logout') return handleLogout(request, env)
     if (pathname === '/api/me') return handleMe(request, env)
     if (pathname === '/api/platform-model') {
-      const limited = await limitPlatformModel(request, env)
+      const limited = limitPlatformModel(request)
       return limited ?? handlePlatformModel(request, env as Env & PlatformEnv)
     }
     if (pathname === '/api/sync') return handleSync(request, env as Env & SyncEnv)
@@ -288,5 +276,20 @@ export default {
     if (pathname === '/api/model') return handleModel(request, env)
     if (pathname.startsWith(modelPrefix)) return handleModelFile(request, env, pathname.slice(modelPrefix.length))
     return env.ASSETS.fetch(request)
+  },
+
+  /** Cron（每小时）：清理过期的模型响应缓存与一天前的限流计数，单次最多 2000 行。 */
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    const now = Date.now()
+    try {
+      await env.DB.batch([
+        env.DB.prepare('delete from platform_request where rowid in (select rowid from platform_request where created_at < ? limit ?)')
+          .bind(now - 60 * 60_000, CLEANUP_BATCH_SIZE),
+        env.DB.prepare('delete from rate_limit where rowid in (select rowid from rate_limit where window_start < ? limit ?)')
+          .bind(now - 24 * 60 * 60_000, CLEANUP_BATCH_SIZE),
+      ])
+    } catch (error) {
+      console.error('[cron] 清理过期数据失败', error)
+    }
   },
 } satisfies ExportedHandler<Env>

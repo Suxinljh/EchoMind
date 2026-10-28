@@ -16,7 +16,7 @@
 
 浏览器下载静态前端和约 160 MB 的中文 Zipformer 模型，使用 AudioWorklet、Web Worker 与 WASM 在本机录音、转写。开始练习前需要登录 Suxin 账号；练习历史会同步到 D1 `practice_sessions`（含原始转写、语义稿、评分和报告，不含音频），本机同时保留缓存。升级前未登录时保存在浏览器的练习仍保留，登录后可导入。模型地址、ID 存本地；API Key 和发送同意状态在当前标签页的 sessionStorage。
 
-用户同意并配置自备模型后，前端向同源 /api/model 发送出题或评价所需的文字以及当次 API Key。Cloudflare Worker 或本机服务再转发给用户选定的模型提供商。自备模型路径没有预置大模型和统一 API Key；平台模型路径使用服务端 `PLATFORM_API_KEY`，按 token 计费并从积分余额扣减。音频不会发给任何服务；/api/model 响应为 no-store。云端 /api/model 使用 Cloudflare Rate Limiting 绑定 `MODEL_RATE_LIMITER`（`wrangler.jsonc` 的 `ratelimits`，30 次/60 秒，按 `CF-Connecting-IP`）；该绑定按数据中心计数，不是全球单桶。本地 dev 不支持时回退到 isolate 内存限流；本地预览与 macOS 包为 60 次/分钟。R2 模型文件响应设置了 1 天的 Cache-Control；Worker 代码没有显式使用 Cache API，边缘是否命中缓存需在线验证。
+用户同意并配置自备模型后，前端向同源 /api/model 发送出题或评价所需的文字以及当次 API Key。Cloudflare Worker 或本机服务再转发给用户选定的模型提供商。自备模型路径没有预置大模型和统一 API Key；平台模型路径使用服务端 `PLATFORM_API_KEY`，按 token 计费并从积分余额扣减。音频不会发给任何服务；/api/model 响应为 no-store。云端 /api/model 的限额由 D1 固定窗口计数保证（`rate_limit` 表，每 IP 30 次/60 秒），isolate 内存限流只做预筛；本地预览与 macOS 包为 60 次/分钟。R2 模型文件响应设置了 1 天的 Cache-Control；Worker 代码没有显式使用 Cache API，边缘是否命中缓存需在线验证。
 
 ## 接手先确认
 
@@ -149,7 +149,7 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 
 回滚：移除 `CREDITS_APP_KEY` secret 会退回本地 `wallet`，但本地余额停留在切换前快照，切换后产生的消费不会回写。切换后如需回滚，必须先重新对账，不能只删 secret。
 
-**2026-10-28 生产切换完成**：EchoMind 已设置 `CREDITS_APP_KEY`，`0004_platform_request` 已应用到远程 D1；导入 2 笔已支付订单（1 个账号，200 积分），账号中心余额与本地钱包一致。本地 `wallet` 保留 200 作为归档，不再读写。同一天随后应用了 `0005_platform_rate`（平台模型按账号限流计数表）。
+**2026-10-28 生产切换完成**：EchoMind 已设置 `CREDITS_APP_KEY`，`0004_platform_request` 已应用到远程 D1；导入 2 笔已支付订单（1 个账号，200 积分），账号中心余额与本地钱包一致。本地 `wallet` 保留 200 作为归档，不再读写。同一天随后应用了 `0005_platform_rate`、`0006_rate_limit`（限流计数表，`platform_rate` 已并入 `rate_limit`）。
 
 **退款通道已配置**：账号中心与 EchoMind 两端都已设置 `ECHOMIND_PAY_ADMIN_TOKEN` / `PAY_ADMIN_TOKEN`（值相同），审核通过会自动调支付宝原路退款。真实退款仍未做过端到端验证：第一次请用小额订单，并在审核后到支付宝商家后台核对退款单号与金额。
 
@@ -169,8 +169,9 @@ curl -sS -o /dev/null -D - https://echomind.ljhsu.xin/models/zipformer-2025/toke
 - 账号积分模式（设置了 `CREDITS_APP_KEY`）：余额读取、扣费、充值入账都调 `https://account.ljhsu.xin`（`CREDITS_API_URL` / `CREDITS_APP_ID` 在 vars）。扣费在返回模型结果之前完成，账号中心不可用时返回 503 而不是白给结果；扣费幂等键为 `sha256(sub:requestId)`，避免跨用户碰撞和超长。本地只写 `model_usage` 保存 token/模型明细，不再写 `wallet` 和 `credit_ledger`。
 - 未设置 `CREDITS_APP_KEY` 时保持旧路径：扣余额、写台账、写用量在同一个 D1 batch 中完成，余额不足时不会扣成负数。余额在顶部「积分」按钮中查看，点击可看最近 20 条真实 token 用量。
 - 平台模型上游请求 60 秒超时，并监听客户端断开后中止上游，避免客户端放弃后仍继续生成/计费。
-- `/api/platform-model` 按账号限流 20 次/60 秒：计数在 D1 表 `platform_rate`（`migrations/0005_platform_rate.sql`，每次调用一次 upsert，窗口对齐 60 秒），在扣费与上游调用之前拦截，超限返回 429 + `Retry-After`。
-- **已知问题**：Cloudflare Rate Limiting 绑定在本账号的生产环境实测不生效——`MODEL_RATE_LIMITER`（30/60 秒）与 `PLATFORM_RATE_LIMITER`（20/60 秒）部署后各发 36/40 个请求全部放行（本地 `wrangler dev` 能正常限流），所以两个接口的真正限额都改用 D1 固定窗口计数（见上一条，线上已验证第 31 个请求起 429）。绑定配置仍保留作为前置的尽力拦截；如果确认这个账号永远不生效，可以移除两个 `ratelimits` 绑定和 `worker/index.ts` 里的调用，避免误以为它们有效。
+- `/api/platform-model` 按账号限流 20 次/60 秒：计数在 D1 表 `rate_limit`（scope=`platform`，窗口对齐 60 秒），在扣费与上游调用之前拦截，超限返回 429 + `Retry-After`；按 IP 只保留 isolate 内存预筛。
+- **Cloudflare Rate Limiting 绑定在本账号不生效**：曾配置 `MODEL_RATE_LIMITER` / `PLATFORM_RATE_LIMITER`，部署后各发 36/40 个请求全部放行（本地 `wrangler dev` 能正常限流），现已移除绑定配置，限额全部改用 D1 计数（线上验证：`/api/model` 第 31 个请求起 429）。
+- **每小时 Cron**（`wrangler.jsonc` 的 `triggers.crons` = `17 * * * *`）清理 `platform_request` 过期缓存与一天前的 `rate_limit` 窗口，单次最多 2000 行；请求路径里仍保留一个同口径的 200 行兜底清理。
 - 客户端为每次平台调用生成 `requestId`；网络错误时自动重试一次并复用同一 ID。服务端在 `platform_request` 表缓存已完成的结果（1 小时），同一 ID 的重试直接返回缓存、不重复调用上游、不重复扣费；过期缓存每次请求最多清理 200 行（`created_at` 有索引），不会随表体积变慢。
 - 当前充值套餐：¥1/100 积分、¥10/1000、¥50/5000，另可按积分自定义额度（50～1,000,000 积分，1 积分 = ¥0.01）。金额一律由服务端按积分重算（`customPackage`），不信任客户端传来的价格；账号中心 `/credits` 的充值入口跳转到 `https://echomind.ljhsu.xin/?recharge=<积分>`。充值仍由 EchoMind 的支付宝商户号收款，支付成功后调账号中心 `credit` 入账；退款由账号中心发起，`ECHOMIND_PAY_ADMIN_TOKEN`（与 EchoMind `PAY_ADMIN_TOKEN` 一致）已配置，但真实退款尚待小额端到端验证。
 

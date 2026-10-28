@@ -11,6 +11,7 @@
     "build": "node scripts/prepare-model.mjs && tsc -b && vite build",
     "build:cloudflare": "ECHOMIND_CLOUDFLARE_BUILD=1 pnpm build && node scripts/clean-cloudflare-assets.mjs",
     "deploy:cloudflare": "pnpm build:cloudflare && wrangler deploy",
+    "import:credits": "node scripts/import-credits.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

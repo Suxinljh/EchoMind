@@ -28,5 +28,5 @@ export function takeAuthNotice(): string {
   params.delete('auth_error')
   const query = params.toString()
   window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
-  return ok ? '已登录 Suxin 账号。练习记录仍保存在本机浏览器。' : `登录未完成：${error || '请重试'}`
+  return ok ? '已登录 Suxin 账号。练习记录会自动同步到该账号，音频仍只在本机处理。' : `登录未完成：${error || '请重试'}`
 }

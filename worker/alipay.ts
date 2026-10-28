@@ -25,6 +25,16 @@ export const PACKAGES: Record<string, CreditPackage> = {
   pro: { id: 'pro', label: '5000 积分', amountCents: 5000, credits: 5000 },
 }
 
+/** 自定义充值额度：最低 50 积分（¥0.50），最高 1,000,000 积分（¥10,000）。 */
+export const MIN_CUSTOM_CREDITS = 50
+export const MAX_CUSTOM_CREDITS = 1_000_000
+
+/** 自定义额度按 1 积分 = ¥0.01 动态计价，因此金额（分）等于积分数量。 */
+export function customPackage(credits: number): CreditPackage | null {
+  if (!Number.isSafeInteger(credits) || credits < MIN_CUSTOM_CREDITS || credits > MAX_CUSTOM_CREDITS) return null
+  return { id: 'custom', label: `${credits} 积分`, amountCents: credits, credits }
+}
+
 const SANDBOX_GATEWAY = 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
 const encoder = new TextEncoder()
 
@@ -90,8 +100,13 @@ async function signParams(params: Record<string, string>, key: CryptoKey): Promi
 async function verifyParams(params: Record<string, string>, key: CryptoKey): Promise<boolean> {
   const signature = params.sign
   if (!signature) return false
-  const raw = Uint8Array.from(atob(signature), char => char.charCodeAt(0))
-  return crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, raw, encoder.encode(canonical(params, true)))
+  try {
+    const raw = Uint8Array.from(atob(signature), char => char.charCodeAt(0))
+    return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, raw, encoder.encode(canonical(params, true)))
+  } catch {
+    // 非法 base64 或签名格式不能让整个通知/回跳变成 500。
+    return false
+  }
 }
 
 /** 生成页面跳转表单（必须由浏览器渲染并提交，不能当 URL 用）。 */
@@ -181,11 +196,16 @@ export async function refundQuery(env: PayEnv, request: Request, outTradeNo: str
 /** 校验支付宝异步通知或同步回跳参数。 */
 export async function verifyAlipayParams(env: PayEnv, params: Record<string, string>): Promise<boolean> {
   if (!env.ALIPAY_PUBLIC_KEY) return false
-  const key = await publicKey(env.ALIPAY_PUBLIC_KEY)
-  const valid = await verifyParams(params, key)
-  if (!valid) return false
-  if (params.app_id && env.ALIPAY_APP_ID && params.app_id !== env.ALIPAY_APP_ID) return false
-  return true
+  try {
+    const key = await publicKey(env.ALIPAY_PUBLIC_KEY)
+    const valid = await verifyParams(params, key)
+    if (!valid) return false
+    if (params.app_id && env.ALIPAY_APP_ID && params.app_id !== env.ALIPAY_APP_ID) return false
+    return true
+  } catch {
+    // 密钥配置错误或签名格式异常时按验签失败处理。
+    return false
+  }
 }
 
 export function parseFormParams(form: FormData): Record<string, string> {
@@ -207,21 +227,55 @@ export async function createOrder(env: PayEnv, userId: string, pkg: CreditPackag
   return outTradeNo
 }
 
-/** 幂等入账：只有第一次把订单置为 paid 时才增加积分。 */
+/**
+ * 幂等入账（旧自有 wallet，本地开发/回滚模式）：
+ * 订单置 paid、写台账、加余额在同一个 D1 batch（事务）里完成。
+ * 第三步用 changes() 判断第二步是否真的插入了台账，重复通知不会重复加积分；
+ * 若订单已是 paid 但台账缺失（历史半完成状态），下一次通知会补齐。
+ */
 export async function markOrderPaid(env: PayEnv, outTradeNo: string, tradeNo: string): Promise<boolean> {
   const now = Date.now()
-  const order = await env.DB.prepare('select user_id, credits, status from pay_order where out_trade_no = ?').bind(outTradeNo).first<{ user_id: string; credits: number; status: string }>()
+  const order = await env.DB.prepare('select 1 as ok from pay_order where out_trade_no = ?').bind(outTradeNo).first<{ ok: number }>()
   if (!order) return false
-  if (order.status === 'paid') return true
-  const updated = await env.DB.prepare("update pay_order set status = 'paid', trade_no = ?, paid_at = ? where out_trade_no = ? and status <> 'paid'")
-    .bind(tradeNo, now, outTradeNo)
-    .run()
-  if (!updated.meta.changes) return true
   await env.DB.batch([
-    env.DB.prepare('insert into wallet (user_id, balance, updated_at) values (?, ?, ?) on conflict(user_id) do update set balance = balance + excluded.balance, updated_at = excluded.updated_at')
-      .bind(order.user_id, order.credits, now),
-    env.DB.prepare('insert into credit_ledger (id, user_id, delta, reason, ref, created_at) values (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), order.user_id, order.credits, 'recharge', outTradeNo, now),
+    env.DB.prepare("update pay_order set status = 'paid', trade_no = ?, paid_at = ? where out_trade_no = ? and status <> 'paid'")
+      .bind(tradeNo, now, outTradeNo),
+    env.DB.prepare(`insert into credit_ledger (id, user_id, delta, reason, ref, created_at)
+      select ?, user_id, credits, 'recharge', out_trade_no, ?
+      from pay_order
+      where out_trade_no = ? and status = 'paid'
+        and not exists (select 1 from credit_ledger where reason = 'recharge' and ref = ?)`)
+      .bind(crypto.randomUUID(), now, outTradeNo, outTradeNo),
+    env.DB.prepare(`insert into wallet (user_id, balance, updated_at)
+      select user_id, credits, ? from pay_order
+      where out_trade_no = ? and status = 'paid' and changes() = 1
+      on conflict(user_id) do update set balance = balance + excluded.balance, updated_at = excluded.updated_at`)
+      .bind(now, outTradeNo),
   ])
   return true
+}
+
+export type PaidOrder = { user_id: string; credits: number; amount_cents: number; paid_at: number }
+
+/**
+ * 只把订单置为 paid 并返回入账信息，不碰本地 wallet。
+ * 账号积分模式下由调用方再调账号中心 credit（按 appId + orderId 幂等，可重试）。
+ */
+export async function markOrderPaidOnly(env: PayEnv, outTradeNo: string, tradeNo: string): Promise<PaidOrder | null> {
+  const order = await env.DB.prepare('select user_id, credits, amount_cents, paid_at, status from pay_order where out_trade_no = ?')
+    .bind(outTradeNo)
+    .first<{ user_id: string; credits: number; amount_cents: number; paid_at: number | null; status: string }>()
+  if (!order) return null
+  const now = Date.now()
+  if (order.status !== 'paid') {
+    await env.DB.prepare("update pay_order set status = 'paid', trade_no = ?, paid_at = ? where out_trade_no = ? and status <> 'paid'")
+      .bind(tradeNo, now, outTradeNo).run()
+    return { user_id: order.user_id, credits: order.credits, amount_cents: order.amount_cents, paid_at: now }
+  }
+  return {
+    user_id: order.user_id,
+    credits: order.credits,
+    amount_cents: order.amount_cents,
+    paid_at: order.paid_at ?? now,
+  }
 }

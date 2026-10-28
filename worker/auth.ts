@@ -9,7 +9,7 @@ const SESSION_COOKIE = 'echomind_account'
 const FLOW_COOKIE = 'echomind_auth_flow'
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 const FLOW_TTL_SECONDS = 600
-const DEFAULT_ISSUER = 'https://login.ljhsu.xin/api/auth'
+const DEFAULT_ISSUER = 'https://account.ljhsu.xin/api/auth'
 
 type AuthEnv = Env & {
   OIDC_CLIENT_ID?: string
@@ -231,6 +231,8 @@ export async function handleLogout(request: Request, env: AuthEnv): Promise<Resp
 
 export async function handleMe(request: Request, env: AuthEnv): Promise<Response> {
   if (request.method !== 'GET') return Response.json({ error: '只支持 GET' }, { status: 405, headers: { 'Cache-Control': 'no-store' } })
+  // 未配置 OIDC 时返回 503，前端据此隐藏登录入口，而不是让用户点到 503 的 /auth/login。
+  if (!configured(env)) return Response.json({ user: null, available: false }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
   const account = await readAccount(request, env)
-  return Response.json({ user: account }, { headers: { 'Cache-Control': 'no-store' } })
+  return Response.json({ user: account, available: true }, { headers: { 'Cache-Control': 'no-store' } })
 }

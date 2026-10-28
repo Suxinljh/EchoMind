@@ -131,3 +131,5 @@
 .account-action{color:var(--app-muted,#7d8b82);text-decoration:none;font-weight:500;padding:0 5px;border-left:1px solid var(--app-line,#e6ebe5);margin-left:1px}
 .account-action:hover{color:var(--app-primary-ink,#2c7151)}
 @media(max-width:600px){.account-name{display:none}.account-chip{max-width:none}.account-login{padding:0 11px}}
+.import-history{width:100%;margin-top:10px;border:1px dashed #e3cf9d;background:#fff8e9;color:#8a6a2f;border-radius:8px;padding:9px 11px;font-size:12px;line-height:1.6;text-align:left;cursor:pointer}
+.import-history:hover{background:#fff3d8}

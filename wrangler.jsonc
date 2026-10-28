@@ -15,12 +15,29 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "echomind-credits", "database_id": "515c48f9-0877-4480-9b6d-f7622e103a4b" }
   ],
+  "ratelimits": [
+    {
+      "name": "MODEL_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      // 平台模型直接消耗账号积分：单独一个更紧的配额（20 次/60 秒）。
+      "name": "PLATFORM_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 20, "period": 60 }
+    }
+  ],
   "vars": {
     "PLATFORM_MODEL_BASE_URL": "https://api.deepseek.com/v1",
     "PLATFORM_MODEL_ID": "deepseek-chat",
     "PLATFORM_INPUT_COST_PER_M": "2",
     "PLATFORM_OUTPUT_COST_PER_M": "8",
-    "PLATFORM_MARKUP": "5"
+    "PLATFORM_MARKUP": "5",
+    // 账号中心。设置 CREDITS_APP_KEY secret 后余额/扣费/入账改走账号中心；
+    // 未设置时保持本地 wallet（本地开发与回滚）。
+    "CREDITS_API_URL": "https://account.ljhsu.xin",
+    "CREDITS_APP_ID": "echomind"
   },
   "cache": {
     "enabled": true

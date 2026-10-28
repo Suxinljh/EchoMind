@@ -6,33 +6,46 @@ type UsageKind = 'plan' | 'evaluate' | 'overall' | 'test'
 type ChatOptions = { timeoutMs?: number; testOnly?: boolean; signal?: AbortSignal; mode?: ModelMode; kind?: UsageKind; maxTokens?: number }
 
 async function chat(provider: Provider, messages: { role: 'system' | 'user' | 'assistant'; content: string }[], options: ChatOptions = {}): Promise<{ text: string; usage?: { input?: number; output?: number } }> {
-  const controller = new AbortController()
+  const platform = options.mode === 'platform'
+  // 平台模型用同一个 requestId 自动重试一次；服务端已完成时返回缓存，不会重复扣费。
+  const requestId = platform ? crypto.randomUUID() : ''
   const timeoutMs = options.timeoutMs ?? 90000
-  const timer = setTimeout(() => controller.abort(), timeoutMs + 5000)
-  // 超时与外部取消（切换练习、重新生成）共用一个 controller，但要区分两种中止原因。
   const caller = options.signal
-  const abortFromCaller = () => controller.abort()
-  caller?.addEventListener('abort', abortFromCaller)
-  try {
-    if (caller?.aborted) throw new Error('已取消')
-    const platform = options.mode === 'platform'
-    const response = await fetch(platform ? '/api/platform-model' : '/api/model', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
-      body: JSON.stringify(platform ? { kind: options.kind, messages } : { provider, messages, testOnly: !!options.testOnly, maxTokens: options.maxTokens }),
-      signal: controller.signal,
-    })
-    const data = await response.json() as { text?: string; usage?: { input?: number; output?: number }; error?: string }
-    if (!response.ok) throw new Error(data.error || `模型服务返回 HTTP ${response.status}`)
-    if (!data.text?.trim()) throw new Error('模型响应缺少文本内容')
-    if (platform) window.dispatchEvent(new Event('echomind-credits-changed'))
-    return { text: data.text, usage: data.usage }
-  } catch (error) {
-    if (caller?.aborted) throw new Error('已取消')
-    if (controller.signal.aborted) throw new Error(`模型服务在 ${Math.round((timeoutMs + 5000) / 1000)} 秒内未响应，请稍后重试。`)
-    if (error instanceof SyntaxError) throw new Error('模型服务未返回 JSON，请刷新页面后重试。')
-    if (error instanceof TypeError) throw new Error('无法连接模型服务，请检查网络连接。')
-    throw error
-  } finally { clearTimeout(timer); caller?.removeEventListener('abort', abortFromCaller) }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs + 5000)
+    // 超时与外部取消（切换练习、重新生成）共用一个 controller，但要区分两种中止原因。
+    const abortFromCaller = () => controller.abort()
+    caller?.addEventListener('abort', abortFromCaller)
+    try {
+      if (caller?.aborted) throw new Error('已取消')
+      const response = await fetch(platform ? '/api/platform-model' : '/api/model', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+        body: JSON.stringify(platform
+          ? { kind: options.kind, messages, requestId }
+          : { provider, messages, testOnly: !!options.testOnly, maxTokens: options.maxTokens }),
+        signal: controller.signal,
+      })
+      const data = await response.json() as { text?: string; usage?: { input?: number; output?: number }; error?: string }
+      if (!response.ok) throw new Error(data.error || `模型服务返回 HTTP ${response.status}`)
+      if (!data.text?.trim()) throw new Error('模型响应缺少文本内容')
+      if (platform) window.dispatchEvent(new Event('echomind-credits-changed'))
+      return { text: data.text, usage: data.usage }
+    } catch (error) {
+      if (caller?.aborted) throw new Error('已取消')
+      // 只对平台路径的网络错误重试；复用 requestId，服务端已完成时直接返回缓存。
+      if (platform && attempt === 0 && !controller.signal.aborted && error instanceof TypeError) {
+        await new Promise(resolve => setTimeout(resolve, 800))
+        continue
+      }
+      if (controller.signal.aborted) throw new Error(`模型服务在 ${Math.round((timeoutMs + 5000) / 1000)} 秒内未响应，请稍后重试。`)
+      if (error instanceof SyntaxError) throw new Error('模型服务未返回 JSON，请刷新页面后重试。')
+      if (error instanceof TypeError) throw new Error('无法连接模型服务，请检查网络连接。')
+      throw error
+    } finally { clearTimeout(timer); caller?.removeEventListener('abort', abortFromCaller) }
+  }
+  throw new Error('模型服务请求失败，请稍后重试。')
 }
 
 function parseJson(text: string): unknown {
